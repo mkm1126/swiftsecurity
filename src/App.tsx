@@ -1,0 +1,1069 @@
+import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { isAfter, startOfToday } from 'date-fns';
+import { ClipboardList } from 'lucide-react';
+import { SecurityRoleRequest } from './types';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import { supabase } from './lib/supabase';
+import { toast } from 'sonner';
+import Header from './components/Header';
+import AgencySelect from './components/AgencySelect';
+import UserSelect from './components/UserSelect';
+import { routes, roleRouteByArea, toRolePath } from './lib/routes';
+
+const REQUESTS_TABLE = 'security_role_requests';
+
+// Utilities
+const snakeToCamel = (s: string) => s.replace(/_([a-z])/g, (_: any, c: string) => c.toUpperCase());
+const mapAreaTypeToRadio = (t: string | null | undefined) => {
+  const v = String(t || '').toLowerCase();
+  if (!v) return '';
+  if (v === 'elm' || v.includes('elm')) return 'elm';
+  if (v === 'accounting_procurement' || v.includes('account') || v.includes('procure') || v === 'ap') return 'accounting_procurement';
+  if (v === 'hr_payroll' || v.includes('payroll') || v.startsWith('hr')) return 'hr_payroll';
+  if (v === 'epm_data_warehouse' || v.startsWith('epm') || v.includes('warehouse') || v === 'dw') return 'epm_data_warehouse';
+  return v;
+};
+
+// Optional helper to keep around (only call this when you *explicitly* want to nuke drafts)
+function clearRoleDraftsFromLocalStorage() {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (
+      key &&
+      (key.startsWith('selectRoles_') ||
+        key.startsWith('elmRoles_') ||
+        key.startsWith('epmDwhRoles_') ||
+        key.startsWith('hrPayrollRoles_'))
+    ) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach((k) => localStorage.removeItem(k));
+}
+
+async function copyExistingUserRoles(newRequestId: string, copyFromEmployeeId: string) {
+  try {
+    const { data: existingRequest } = await supabase
+      .from('security_role_requests')
+      .select('id, status')
+      .eq('employee_id', copyFromEmployeeId)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!existingRequest) return;
+
+    const { data: existingRoles } = await supabase
+      .from('security_role_selections')
+      .select('*')
+      .eq('request_id', existingRequest.id)
+      .maybeSingle();
+    if (!existingRoles) return;
+
+    const { id, created_at, updated_at, request_id, ...rest } = existingRoles as any;
+    const payload = {
+      ...rest,
+      request_id: newRequestId,
+      role_justification: (existingRoles as any).role_justification || 'Copied from existing user access',
+    };
+    await supabase.from('security_role_selections').upsert(payload, { onConflict: 'request_id' });
+  } catch (e) {
+    console.warn('Copy roles failed (non-fatal):', e);
+  }
+}
+
+function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { id: paramId } = useParams();
+  const stateId = (location.state as any)?.requestId as string | undefined;
+  const effectiveId = (stateId || (paramId as any)) as string | undefined;
+  const ctaLabel = effectiveId ? 'Save and Verify Role Selection' : 'Select Individual Roles';
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    setError,
+    formState: { errors },
+  } = useForm<SecurityRoleRequest>();
+
+  const [selectedOption, setSelectedOption] = useState<'copy' | 'select' | null>(null);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [isTestMode, setIsTestMode] = useState(() => localStorage.getItem('testMode') === 'true');
+  const [submitting, setSubmitting] = useState(false);
+  const [hasRestoredData, setHasRestoredData] = useState(false);
+
+  const selectedSecurityArea = watch('securityArea');
+  const hasSelectedSecurityArea = !!selectedSecurityArea;
+
+  // Listen for user selection in header
+  const handleUserChange = (userName: string | null) => setCurrentUser(userName);
+
+  // Test mode toggles
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'testMode') setIsTestMode(e.newValue === 'true');
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Clear form when leaving test mode (not during edit)
+  useEffect(() => {
+    if (!isTestMode) {
+      if (effectiveId) return;
+      reset({ startDate: '', employeeName: '', employeeId: '' } as any);
+      setSelectedOption(null);
+      setSelectedUser(null);
+    }
+  }, [isTestMode, reset, effectiveId]);
+
+  /**
+   * Restore main-form data when returning from a role-selection page.
+   * IMPORTANT FIX:
+   * We NO LONGER purge any localStorage keys for role pages here.
+   * That purge was deleting the role-page "draft" (e.g. selectRoles_draft_<requestId>),
+   * which prevented SelectRolesPage from reloading prior selections if the user
+   * navigated back to the main form and then returned.
+   */
+  useEffect(() => {
+    if (effectiveId || hasRestoredData) return; // Skip if editing existing request or already restored
+
+    const savedFormData = localStorage.getItem('pendingMainFormData');
+    if (savedFormData) {
+      try {
+        const parsedData = JSON.parse(savedFormData);
+        console.log('Restoring form data:', parsedData);
+        reset(parsedData);
+        setHasRestoredData(true);
+        // Keep role drafts intact; only clear the *main form* cache
+        localStorage.removeItem('pendingMainFormData');
+      } catch (error) {
+        console.error('Error restoring form data:', error);
+        localStorage.removeItem('pendingMainFormData');
+      }
+    }
+  }, [effectiveId, hasRestoredData, reset]);
+
+  // Autofill test data (skip during edit or after restore)
+  useEffect(() => {
+    if (effectiveId || hasRestoredData) return;
+    if (!(isTestMode && currentUser)) return;
+
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 7);
+    const futureDateString = futureDate.toISOString().split('T')[0];
+
+    // Generate unique identifiers for this test session
+    const timestamp = Date.now();
+    const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const uniqueId = `${timestamp.toString().slice(-6)}${randomSuffix}`;
+    
+    const testData: any = {
+      startDate: futureDateString,
+      employeeName: `Test User ${uniqueId}`,
+      employeeId: `EMP${uniqueId}`,
+      isNonEmployee: false,
+      workLocation: `${100 + Math.floor(Math.random() * 900)} Main Street, Saint Paul, MN 55101`,
+      workPhone: `651555${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
+      email: `test.user.${uniqueId}@state.mn.us`,
+      agencyName: 'Administration',
+      agencyCode: 'G02',
+      justification: 'Access required for pilot testing.',
+      submitterName: `Submitter ${uniqueId}`,
+      submitterEmail: `submitter.${uniqueId}@state.mn.us`,
+      supervisorName: 'Supervisor Example',
+      supervisorUsername: 'supervisor@state.mn.us',
+      securityAdminName: 'Security Admin',
+      securityAdminUsername: 'admin@state.mn.us',
+      securityArea: 'accounting_procurement',
+    };
+
+    Object.entries(testData).forEach(([k, v]) => setValue(k as any, v as any));
+  }, [isTestMode, currentUser, setValue, effectiveId, hasRestoredData]);
+
+  // Separate effect to handle security area-specific test data
+  useEffect(() => {
+    if (effectiveId || hasRestoredData) return;
+    if (!(isTestMode && currentUser && selectedSecurityArea)) return;
+
+    // Generate unique identifiers for this test session
+    const timestamp = Date.now();
+    const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const uniqueId = `${timestamp.toString().slice(-6)}${randomSuffix}`;
+
+    // First, clear all security area-specific fields to remove data from previously selected areas
+    const allAreaFields = [
+      'accountingDirector',
+      'accountingDirectorUsername',
+      'hrDirector', 
+      'hrDirectorEmail',
+      'hrMainframeLogonId',
+      'elmDirector',
+      'elmDirectorEmail',
+      'elmKeyAdmin',
+      'elmKeyAdminUsername'
+    ];
+    
+    allAreaFields.forEach(field => {
+      setValue(field as any, '', { shouldDirty: false });
+    });
+    // Only set director data for the selected security area
+    const areaSpecificData: any = {};
+
+    if (selectedSecurityArea === 'accounting_procurement') {
+      areaSpecificData.accountingDirector = 'Accounting Director Test';
+      areaSpecificData.accountingDirectorUsername = 'Accounting.Director@state.mn.us';
+    } else if (selectedSecurityArea === 'hr_payroll') {
+      areaSpecificData.hrDirector = 'HR Director Test';
+      areaSpecificData.hrDirectorEmail = 'HR.Director@state.mn.us';
+      areaSpecificData.hrMainframeLogonId = `HRTEST${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+    } else if (selectedSecurityArea === 'elm') {
+      areaSpecificData.elmDirector = 'ELM Director Test';
+      areaSpecificData.elmDirectorEmail = 'ELM.Director@state.mn.us';
+      areaSpecificData.elmKeyAdmin = 'ELM Director Test';
+      areaSpecificData.elmKeyAdminUsername = 'ELM.Director@state.mn.us';
+    }
+    // Note: EPM Data Warehouse doesn't have specific director fields
+
+    Object.entries(areaSpecificData).forEach(([k, v]) => setValue(k as any, v as any));
+  }, [isTestMode, currentUser, selectedSecurityArea, setValue, effectiveId, hasRestoredData]);
+
+  // Hydrate when editing
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!effectiveId) return;
+      setIsTestMode(false);
+      try {
+        const { data: req, error } = await supabase
+          .from('security_role_requests')
+          .select('*')
+          .eq('id', effectiveId)
+          .maybeSingle();
+        if (error || !req) {
+          console.error('Failed to fetch request for edit (check table exposure):', error);
+          return;
+        }
+        const mapped: any = {};
+        for (const [k, v] of Object.entries(req)) {
+          if (['id', 'created_at', 'updated_at'].includes(k)) continue;
+          mapped[snakeToCamel(k)] = Array.isArray(v) ? v : (v ?? (typeof v === 'boolean' ? v : ''));
+        }
+        if (mounted) reset(mapped);
+        if ((req as any)?.supervisor_email != null)
+          setValue('supervisorUsername' as any, (req as any).supervisor_email as any, { shouldDirty: false });
+        if (mounted && (req as any)?.security_admin_email != null)
+          setValue('securityAdminUsername' as any, (req as any).security_admin_email as any, { shouldDirty: false });
+
+        // Fetch security areas and populate director fields
+        const { data: areas } = await supabase
+          .from('security_areas')
+          .select('area_type, director_name, director_email')
+          .eq('request_id', effectiveId);
+        if (areas && areas.length > 0) {
+          const firstArea = areas[0] as any;
+          const radio = mapAreaTypeToRadio(firstArea?.area_type);
+          if (radio) setValue('securityArea' as any, radio as any, { shouldDirty: false });
+
+          for (const area of areas) {
+            const areaType = (area as any).area_type;
+            const directorName = (area as any).director_name;
+            const directorEmail = (area as any).director_email;
+
+            if (areaType === 'elm') {
+              if (directorName) setValue('elmDirector' as any, directorName as any, { shouldDirty: false });
+              if (directorEmail) setValue('elmDirectorEmail' as any, directorEmail as any, { shouldDirty: false });
+            } else if (areaType === 'hr_payroll') {
+              if (directorName) setValue('hrDirector' as any, directorName as any, { shouldDirty: false });
+              if (directorEmail) setValue('hrDirectorEmail' as any, directorEmail as any, { shouldDirty: false });
+            } else if (areaType === 'accounting_procurement') {
+              if (directorName) setValue('accountingDirector' as any, directorName as any, { shouldDirty: false });
+              if (directorEmail) setValue('accountingDirectorUsername' as any, directorEmail as any, { shouldDirty: false });
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Hydration error:', e);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveId, reset, setValue]);
+
+  const onSubmit = async (data: SecurityRoleRequest) => {
+    if (!hasSelectedSecurityArea) {
+      toast.error('Please select a security area before continuing.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      // Check if table is accessible
+      const { error: tableCheckError } = await supabase.from('security_role_requests').select('id').limit(1);
+
+      if (tableCheckError) {
+        console.error('Table access error:', tableCheckError);
+        if (tableCheckError.code === 'PGRST116' || tableCheckError.message?.includes('not found')) {
+          toast.error('Database table not accessible. Please check Supabase configuration.');
+          return;
+        }
+      }
+
+      const isEditing = Boolean(effectiveId);
+      const formattedPhone = data.workPhone ? data.workPhone.replace(/\D/g, '') : null;
+      const pocUser = localStorage.getItem('pocUserName');
+
+      const requestData = {
+        start_date: data.startDate || null,
+        employee_name: data.employeeName || null,
+        employee_id: data.employeeId || null,
+        is_non_employee: data.isNonEmployee || false,
+        work_location: data.workLocation || null,
+        work_phone: formattedPhone,
+        email: data.email || null,
+        agency_name: data.agencyName || null,
+        agency_code: data.agencyCode || null,
+        justification: data.justification || null,
+        submitter_name: data.submitterName || currentUser || 'Submitter Example',
+        submitter_email: data.submitterEmail || 'submitter@state.mn.us',
+        supervisor_name: data.supervisorName || null,
+        supervisor_email: data.supervisorUsername || null,
+        security_admin_name: data.securityAdminName || null,
+        security_admin_email: data.securityAdminUsername || null,
+        hr_mainframe_logon_id: data.hrMainframeLogonId || null,
+      };
+
+      let requestId = effectiveId as string | undefined;
+
+      if (isEditing) {
+        const { data: updated, error } = await supabase
+          .from('security_role_requests')
+          .update(requestData)
+          .eq('id', effectiveId)
+          .select()
+          .maybeSingle();
+        if (error) throw error;
+        requestId = (updated?.id || effectiveId) as string;
+      } else {
+        const { data: created, error } = await supabase.from('security_role_requests').insert(requestData).select().single();
+        if (error) throw error;
+        requestId = created.id as string;
+      }
+
+      // Upsert security area
+      // First, remove any existing security areas that don't match the current selection
+      if (requestId) {
+        try {
+          const { error: deleteError } = await supabase
+            .from('security_areas')
+            .delete()
+            .eq('request_id', requestId)
+            .neq('area_type', data.securityArea);
+          
+          if (deleteError) {
+            console.warn('Warning: Could not clean up old security areas:', deleteError);
+          }
+        } catch (cleanupError) {
+          console.warn('Non-fatal: Security area cleanup failed:', cleanupError);
+        }
+      }
+
+      // Now upsert the current security area
+      const areas: any[] = [];
+      if (data.securityArea === 'accounting_procurement') {
+        areas.push({
+          request_id: requestId,
+          area_type: 'accounting_procurement',
+          director_name: data.accountingDirector || 'Accounting Director',
+          director_email:
+            data.accountingDirectorUsername || data.supervisorUsername || data.submitterEmail,
+        });
+      } else if (data.securityArea === 'hr_payroll') {
+        areas.push({
+          request_id: requestId,
+          area_type: 'hr_payroll',
+          director_name: data.hrDirector || 'HR Director',
+          director_email: data.hrDirectorEmail || data.supervisorUsername || data.submitterEmail,
+        });
+      } else if (data.securityArea === 'epm_data_warehouse') {
+        areas.push({
+          request_id: requestId,
+          area_type: 'epm_data_warehouse',
+          director_name: 'EPM Director',
+          director_email: data.supervisorUsername || data.submitterEmail,
+        });
+      } else if (data.securityArea === 'elm') {
+        areas.push({
+          request_id: requestId,
+          area_type: 'elm',
+          director_name: data.elmKeyAdmin || 'ELM Key Admin',
+          director_email: data.elmKeyAdminUsername || data.supervisorUsername || data.submitterEmail,
+        });
+      }
+      if (areas.length) {
+        for (const area of areas) {
+          try {
+            const { data: existing, error: selectError } = await supabase
+              .from('security_areas')
+              .select('id')
+              .eq('request_id', area.request_id)
+              .eq('area_type', area.area_type)
+              .maybeSingle();
+
+            if (selectError) {
+              console.warn('Error checking existing security area:', selectError);
+            }
+
+            if (existing) {
+              const { error: updateError } = await supabase
+                .from('security_areas')
+                .update({
+                  director_name: area.director_name,
+                  director_email: area.director_email,
+                })
+                .eq('id', existing.id);
+
+              if (updateError) {
+                console.warn('Error updating security area:', updateError);
+              }
+            } else {
+              const { error: insertError } = await supabase.from('security_areas').insert(area);
+
+              if (insertError) {
+                if ((insertError as any).code === '23505') {
+                  console.warn('Security area already exists, continuing...');
+                } else {
+                  throw insertError;
+                }
+              }
+            }
+          } catch (areaError: any) {
+            if (areaError.code === '23505') {
+              console.warn('Security area already exists, continuing...');
+            } else {
+              console.error('Error handling security area:', areaError);
+            }
+          }
+        }
+      }
+
+      // Ensure selections row exists so roles can hydrate
+      try {
+        await supabase
+          .from('security_role_selections')
+          .upsert(
+            {
+              request_id: requestId,
+              home_business_unit: Array.isArray(data.homeBusinessUnit)
+                ? data.homeBusinessUnit
+                : [data.homeBusinessUnit].filter(Boolean),
+            },
+            { onConflict: 'request_id' }
+          );
+      } catch (e) {
+        console.warn('Non-fatal: upsert role selections failed', e);
+      }
+
+      // If copying access
+      if (!isEditing && selectedOption === 'copy' && (selectedUser as any)?.employee_id) {
+        await copyExistingUserRoles(requestId!, (selectedUser as any).employee_id);
+      }
+
+      // Save form data before navigating (only for new requests)
+      if (!isEditing) {
+        localStorage.setItem('pendingMainFormData', JSON.stringify(data));
+      }
+
+      // Navigate to the appropriate role selection page based on security area
+      let targetRoute = '/select-roles'; // default to accounting/procurement
+      if (data.securityArea === 'elm') {
+        targetRoute = '/elm-roles';
+      } else if (data.securityArea === 'hr_payroll') {
+        targetRoute = '/hr-payroll-roles';
+      } else if (data.securityArea === 'epm_data_warehouse') {
+        targetRoute = '/epm-dwh-roles';
+      }
+      navigate(`${targetRoute}/${requestId}`, { state: { requestId } });
+    } catch (error: any) {
+      console.error('Submit error (strict security_role_requests):', error);
+
+      const msg = String(error?.message || '');
+      if (error?.code === 'PGRST116' || /relation.*does not exist/i.test(msg) || /not found/i.test(msg)) {
+        toast.error("Database table 'security_role_requests' is not accessible. Please check your Supabase setup.");
+        console.error('Database table access error. Please ensure:');
+        console.error('1. The table exists in your Supabase database');
+        console.error('2. RLS policies allow public access for insert/select operations');
+        console.error('3. The table is in the public schema');
+      } else if (/home_business_unit/i.test(msg) || /violates not-null/i.test(msg)) {
+        setError('agencyCode', {
+          type: 'manual',
+          message: 'Business Unit is required. Please ensure your agency is properly selected.',
+        });
+      } else {
+        setError('root', { type: 'manual', message: msg || 'Unexpected error.' });
+        toast.error('Could not create/update the request. See console for details.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header
+        title="Request for Access to SWIFT Statewide Systems"
+        subtitle="Complete this form to request security role access"
+        onUserChange={handleUserChange}
+      />
+
+      {!currentUser && !effectiveId ? (
+        <div className="py-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+              <h3 className="text-lg font-medium text-blue-900 mb-2">User Identification Required</h3>
+              <p className="text-blue-700">Please identify yourself to begin creating requests.</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="py-8 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-4xl mx-auto">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 bg-white p-8 rounded-lg shadow">
+              {/* Employee Details */}
+              <div className="space-y-6">
+                <div className="flex items-center">
+                  <ClipboardList className="h-6 w-6 text-blue-600 mr-2" />
+                  <h3 className="text-xl font-semibold text-gray-900">Employee Details</h3>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Start Date of Access*</label>
+                    <input
+                      type="date"
+                      {...register('startDate', {
+                        required: 'Start date is required',
+                        validate: (value) => isAfter(new Date(value), startOfToday()) || 'Start date must be in the future',
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {errors.startDate && <p className="mt-1 text-sm text-red-600">{errors.startDate.message}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text sm font-medium text-gray-700">Employee Name*</label>
+                    <input
+                      type="text"
+                      {...register('employeeName', { required: 'Employee name is required' })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {errors.employeeName && (
+                      <p className="mt-1 text-sm text-red-600">{errors.employeeName.message}</p>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <label className="block text-sm font-medium text-gray-700">Employee ID</label>
+                    <div className="flex items-center mt-1">
+                      <input
+                        type="text"
+                        {...register('employeeId', { required: false })}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                      <div className="ml-3">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('isNonEmployee')}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="ml-2 text-sm text-gray-600">Non-Employee</span>
+                        </label>
+                      </div>
+                    </div>
+                    {errors.employeeId && <p className="mt-1 text-sm text-red-600">{errors.employeeId.message}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Work Location</label>
+                    <input
+                      type="text"
+                      {...register('workLocation')}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Work Phone</label>
+                    <input
+                      type="tel"
+                      {...register('workPhone', {
+                        pattern: {
+                          value: /^(\d{10})?$/,
+                          message: 'Please enter a valid 10-digit phone number || leave empty',
+                        },
+                      })}
+                      placeholder="1234567890"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {errors.workPhone && <p className="mt-1 text-sm text-red-600">{errors.workPhone.message}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Email Address*</label>
+                    <input
+                      type="email"
+                      {...register('email', {
+                        required: 'Email is required',
+                        pattern: {
+                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                          message: 'Invalid email address',
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+                  </div>
+
+                  <div>
+                    <AgencySelect
+                      value={watch('agencyName') || ''}
+                      onChange={(n: string, c: string) => {
+                        setValue('agencyName', n);
+                        setValue('agencyCode', c);
+                      }}
+                      error={errors.agencyName?.message}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Agency Code*</label>
+                    <input
+                      type="text"
+                      {...register('agencyCode', {
+                        required: 'Agency code is required',
+                        maxLength: { value: 3, message: 'Agency code must be 3 characters' },
+                        minLength: { value: 3, message: 'Agency code must be 3 characters' },
+                      })}
+                      readOnly
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50"
+                    />
+                    {errors.agencyCode && <p className="mt-1 text-sm text-red-600">{errors.agencyCode.message}</p>}
+                  </div>
+                </div>
+
+                {errors.root && (
+                  <div className="rounded-md bg-red-50 p-4">
+                    <div className="flex">
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-red-800">Form Error</h3>
+                        <div className="mt-2 text-sm text-red-700">
+                          <p>{errors.root.message}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Request Justification</label>
+                  <textarea
+                    {...register('justification')}
+                    rows={3}
+                    placeholder="Please provide justification for this access request..."
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Submitter Details */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Submitter Details</h3>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Submitter Name*</label>
+                    <input
+                      type="text"
+                      {...register('submitterName', { required: 'Submitter name is required' })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {errors.submitterName && (
+                      <p className="mt-1 text-sm text-red-600">{errors.submitterName.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Submitter Email*</label>
+                    <input
+                      type="email"
+                      {...register('submitterEmail', {
+                        required: 'Submitter email is required',
+                        pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: 'Invalid email address' },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {errors.submitterEmail && (
+                      <p className="mt-1 text-sm text-red-600">{errors.submitterEmail.message}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Approver Details */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Approver Details</h3>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Employee's Supervisor*</label>
+                    <input
+                      type="text"
+                      {...register('supervisorName', { required: 'Supervisor name is required' })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {errors.supervisorName && (
+                      <p className="mt-1 text-sm text-red-600">{errors.supervisorName.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Supervisor Email*</label>
+                    <input
+                      type="email"
+                      {...register('supervisorUsername', {
+                        required: 'Supervisor email is required',
+                        pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: 'Please enter a valid email address' },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="supervisor@example.com"
+                    />
+                    {errors.supervisorUsername && (
+                      <p className="mt-1 text-sm text-red-600">{errors.supervisorUsername.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Agency Security Administrator*</label>
+                    <input
+                      type="text"
+                      {...register('securityAdminName', { required: 'Security admin name is required' })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    {errors.securityAdminName && (
+                      <p className="mt-1 text-sm text-red-600">{errors.securityAdminName.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Security Administrator Email*</label>
+                    <input
+                      type="email"
+                      {...register('securityAdminUsername', {
+                        required: 'Security admin email is required',
+                        pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: 'Please enter a valid email address' },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="admin@example.com"
+                    />
+                    {errors.securityAdminUsername && (
+                      <p className="mt-1 text-sm text-red-600">{errors.securityAdminUsername.message}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Security Details + CTA */}
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Security Details</h3>
+                <p className="text-sm text-gray-700">Please select the security area you need access to</p>
+
+                {!hasSelectedSecurityArea && (
+                  <div className="rounded-md bg-yellow-50 p-4">
+                    <div className="flex">
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-yellow-800">Required Selection</h3>
+                        <div className="mt-2 text-sm text-yellow-700">
+                          <p>Please select a security area to proceed.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        {...register('securityArea', { required: 'Please select a security area' })}
+                        value="accounting_procurement"
+                        className="border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">Accounting / Procurement</span>
+                    </label>
+
+                    {/* Accounting Director fields - show when Accounting/Procurement is selected */}
+                    {selectedSecurityArea === 'accounting_procurement' && (
+                      <div className="ml-6 mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 className="text-sm font-medium text-green-800 mb-4">Accounting Director Information</h4>
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Accounting Director*</label>
+                            <input
+                              type="text"
+                              {...register('accountingDirector', {
+                                required:
+                                  selectedSecurityArea === 'accounting_procurement'
+                                    ? 'Accounting Director is required'
+                                    : false,
+                              })}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="Enter Accounting Director name"
+                            />
+                            {errors.accountingDirector && (
+                              <p className="mt-1 text-sm text-red-600">{errors.accountingDirector.message}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Director Email*</label>
+                            <input
+                              type="email"
+                              {...register('accountingDirectorUsername', {
+                                required:
+                                  selectedSecurityArea === 'accounting_procurement'
+                                    ? 'Director email is required'
+                                    : false,
+                                pattern: {
+                                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                                  message: 'Please enter a valid email address',
+                                },
+                              })}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="director@state.mn.us"
+                            />
+                            {errors.accountingDirectorUsername && (
+                              <p className="mt-1 text-sm text-red-600">{errors.accountingDirectorUsername.message}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        {...register('securityArea')}
+                        value="hr_payroll"
+                        className="border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">HR / Payroll</span>
+                    </label>
+
+                    {/* HR Director fields - show when HR/Payroll is selected */}
+                    {selectedSecurityArea === 'hr_payroll' && (
+                      <div className="ml-6 mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                        <h4 className="text-sm font-medium text-purple-800 mb-4">HR Director Information</h4>
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">HR Director*</label>
+                            <input
+                              type="text"
+                              {...register('hrDirector', {
+                                required: selectedSecurityArea === 'hr_payroll' ? 'HR Director is required' : false,
+                              })}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="Enter HR Director name"
+                            />
+                            {errors.hrDirector && (
+                              <p className="mt-1 text-sm text-red-600">{errors.hrDirector.message}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Director Email*</label>
+                            <input
+                              type="email"
+                              {...register('hrDirectorEmail', {
+                                required:
+                                  selectedSecurityArea === 'hr_payroll' ? 'Director email is required' : false,
+                                pattern: {
+                                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                                  message: 'Please enter a valid email address',
+                                },
+                              })}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="director@state.mn.us"
+                            />
+                            {errors.hrDirectorEmail && (
+                              <p className="mt-1 text-sm text-red-600">{errors.hrDirectorEmail.message}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Mainframe Logon ID*</label>
+                            <input
+                              type="text"
+                              {...register('hrMainframeLogonId', {
+                                required: selectedSecurityArea === 'hr_payroll' ? 'Mainframe Logon ID is required' : false,
+                              })}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="Enter mainframe logon ID"
+                            />
+                            {errors.hrMainframeLogonId && (
+                              <p className="mt-1 text-sm text-red-600">{errors.hrMainframeLogonId.message}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        {...register('securityArea')}
+                        value="epm_data_warehouse"
+                        className="border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">EPM / Data Warehouse</span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        {...register('securityArea')}
+                        value="elm"
+                        className="border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">ELM</span>
+                    </label>
+                    <p className="ml-6 mt-1 text-sm text-gray-500">
+                      DON'T SELECT ELM unless you are seeking access privileges for administrative functions. All staff
+                      automatically have access to ELM courses.
+                    </p>
+
+                    {/* ELM Director fields - show when ELM is selected */}
+                    {selectedSecurityArea === 'elm' && (
+                      <div className="ml-6 mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h4 className="text-sm font-medium text-blue-800 mb-4">ELM Director Information</h4>
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">ELM Director*</label>
+                            <input
+                              type="text"
+                              {...register('elmDirector', {
+                                required: selectedSecurityArea === 'elm' ? 'ELM Director is required' : false,
+                              })}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="Enter ELM Director name"
+                            />
+                            {errors.elmDirector && (
+                              <p className="mt-1 text-sm text-red-600">{errors.elmDirector.message}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Director Email*</label>
+                            <input
+                              type="email"
+                              {...register('elmDirectorEmail', {
+                                required: selectedSecurityArea === 'elm' ? 'Director email is required' : false,
+                                pattern: {
+                                  value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                                  message: 'Please enter a valid email address',
+                                },
+                              })}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="director@state.mn.us"
+                            />
+                            {errors.elmDirectorEmail && (
+                              <p className="mt-1 text-sm text-red-600">{errors.elmDirectorEmail.message}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Role Selection Method */}
+                <div className="bg-gray-50 p-6 rounded-lg mt-6">
+                  <p className="text-gray-700 mb-4">Choose how you want to set up roles for this request:</p>
+                  <div className="space-y-6">
+                    <div className="flex flex-col space-y-4">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOption('copy')}
+                        className={`p-4 text-left rounded-lg border-2 transition-colors ${
+                          selectedOption === 'copy'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-blue-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <h4 className="text-lg font-medium text-gray-900">Copy Existing User Access</h4>
+                        <p className="mt-1 text-sm text-gray-500">
+                          Grant the same roles, agency codes, and workflows as an existing user.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOption('select')}
+                        className={`p-4 text-left rounded-lg border-2 transition-colors ${
+                          selectedOption === 'select'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-blue-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <h4 className="text-lg font-medium text-gray-900">{ctaLabel}</h4>
+                        <p className="mt-1 text-sm text-gray-500">
+                          Choose specific roles and permissions from a comprehensive list.
+                        </p>
+                      </button>
+                    </div>
+
+                    {selectedOption === 'copy' && (
+                      <div className="mt-6 space-y-4 bg-white p-6 rounded-lg border border-gray-200">
+                        <UserSelect
+                          selectedUser={selectedUser}
+                          onUserChange={setSelectedUser as any}
+                          currentUser={currentUser}
+                          formData={watch()}
+                        />
+                      </div>
+                    )}
+
+                    {selectedOption && (
+                      <div className="mt-6">
+                        <button
+                          type="submit"
+                          disabled={submitting || !hasSelectedSecurityArea || (selectedOption === 'copy' && !selectedUser)}
+                          className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                            !submitting && hasSelectedSecurityArea && (selectedOption !== 'copy' || selectedUser)
+                              ? 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                              : 'bg-gray-400 cursor-not-allowed'
+                          }`}
+                        >
+                          {submitting ? 'Saving…' : selectedOption === 'copy' ? 'Submit Request' : ctaLabel}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;

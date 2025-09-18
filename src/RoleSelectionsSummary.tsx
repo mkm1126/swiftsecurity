@@ -1,0 +1,199 @@
+// RoleSelectionsSummary.tsx (v2 - tolerant)
+// Shows ALL selected roles for a request, even if catalog rows are missing or inactive.
+// - No is_active filter (we fetch entire catalog, then order)
+// - Truthiness handles booleans and common string forms ("true","1","t","yes","on")
+// - Fallback: any truthy selection key without a catalog match is still shown with a title-cased label
+// - Groups by domain; unknown keys are grouped under "Other"
+
+import React, { useEffect, useMemo, useState } from 'react';
+import { supabase } from './lib/supabase';
+
+type RoleCatalog = {
+  flag_key: string;
+  name: string;
+  domain: string;
+  display_order: number | null;
+  requires_route_controls: boolean | null;
+  is_active?: boolean | null;
+};
+
+type Props = {
+  requestId: string;
+  title?: string;
+  className?: string;
+};
+
+function snakeToCamel(s: string) {
+  return s.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+}
+
+function titleCase(s: string) {
+  return s.replace(/[_\-]+/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+// Treats common stringy booleans as true
+function isTruthy(v: any): boolean {
+  if (v === true) return true;
+  if (typeof v === 'number') return v === 1;
+  if (typeof v === 'string') {
+    const n = v.trim().toLowerCase();
+    return n === 'true' || n === 't' || n === '1' || n === 'yes' || n === 'y' || n === 'on';
+  }
+  return false;
+}
+
+const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selections', className = '' }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Record<string, any> | null>(null);
+  const [catalog, setCatalog] = useState<RoleCatalog[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        // Selection row (all columns)
+        const { data: sel, error: selErr } = await supabase
+          .from('security_role_selections')
+          .select('*')
+          .eq('request_id', requestId)
+          .maybeSingle();
+        if (selErr) throw selErr;
+        if (!isMounted) return;
+        setSelection(sel ?? null);
+
+        // Full role catalog (no is_active filter); order by domain + display_order
+        const { data: rc, error: rcErr } = await supabase
+          .from('role_catalog')
+          .select('flag_key, name, domain, display_order, requires_route_controls, is_active')
+          .order('domain', { ascending: true })
+          .order('display_order', { ascending: true, nullsFirst: true });
+        if (rcErr) throw rcErr;
+        if (!isMounted) return;
+        setCatalog(rc ?? []);
+      } catch (e: any) {
+        if (!isMounted) return;
+        setError(e?.message ?? String(e));
+      } finally {
+        if (!isMounted) return;
+        setLoading(false);
+      }
+    }
+    load();
+    return () => { isMounted = false; };
+  }, [requestId]);
+
+  const derived = useMemo(() => {
+    const pickedFromCatalog: RoleCatalog[] = [];
+    const fallbackKeys: string[] = [];
+
+    if (!selection) return { pickedFromCatalog, fallbackKeys, grouped: [] as Array<[string, RoleCatalog[]]>, total: 0 };
+
+    const seen = new Set<string>();
+    // 1) walk catalog to find selected roles
+    for (const rc of catalog) {
+      const snake = rc.flag_key;
+      const camel = snakeToCamel(snake);
+      const vSnake = selection[snake];
+      const vCamel = selection[camel];
+      const isSelected = isTruthy(vSnake) || isTruthy(vCamel);
+      if (isSelected) {
+        pickedFromCatalog.push(rc);
+        seen.add(snake);
+        seen.add(camel);
+      }
+    }
+
+    // 2) fallback for any truthy keys that weren't in the catalog
+    for (const [key, value] of Object.entries(selection)) {
+      if (seen.has(key)) continue;
+      if (!isTruthy(value)) continue;
+      // Skip obvious non-role fields by heuristic
+      if (['id','request_id','created_at','updated_at','role_justification','home_business_unit','other_business_units'].includes(key)) continue;
+
+      fallbackKeys.push(key);
+      pickedFromCatalog.push({
+        flag_key: key,
+        name: titleCase(key),
+        domain: 'other',
+        display_order: null,
+        requires_route_controls: false,
+        is_active: null,
+      });
+    }
+
+    // 3) group by domain
+    const byDomain = new Map<string, RoleCatalog[]>();
+    for (const r of pickedFromCatalog) {
+      const arr = byDomain.get(r.domain) ?? [];
+      arr.push(r);
+      byDomain.set(r.domain, arr);
+    }
+    const grouped = Array.from(byDomain.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+    return { pickedFromCatalog, fallbackKeys, grouped, total: pickedFromCatalog.length };
+  }, [selection, catalog]);
+
+  if (loading) {
+    return (
+      <div className={`rounded-md border border-gray-200 bg-white p-4 ${className}`}>
+        <div className="text-sm text-gray-500">Loading {title}…</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={`rounded-md border border-red-200 bg-red-50 p-4 ${className}`}>
+        <div className="text-sm text-red-700">Error loading {title}: {error}</div>
+      </div>
+    );
+  }
+
+  if (!selection || derived.total === 0) {
+    return (
+      <div className={`rounded-md border border-yellow-200 bg-yellow-50 p-4 ${className}`}>
+        <div className="text-sm text-yellow-800">No roles selected.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`rounded-lg border border-gray-200 bg-white ${className}`}>
+      <div className="border-b border-gray-200 px-4 py-3">
+        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+        <p className="mt-1 text-xs text-gray-500">
+          Showing all selected roles. Items with route controls are marked with <span className="font-semibold">•</span>.
+        </p>
+        {derived.fallbackKeys.length > 0 && (
+          <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
+            {derived.fallbackKeys.length} role key{derived.fallbackKeys.length > 1 ? 's' : ''} not found in role catalog:
+            {' '}{derived.fallbackKeys.slice(0,6).join(', ')}{derived.fallbackKeys.length > 6 ? '…' : ''}
+          </p>
+        )}
+      </div>
+
+      <div className="p-4 space-y-4">
+        {derived.grouped.map(([domain, roles]) => (
+          <div key={domain}>
+            <div className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">
+              {titleCase(domain)}
+            </div>
+            <ul className="space-y-1">
+              {roles.map((r) => (
+                <li key={r.flag_key} className="text-sm text-gray-800">
+                  <span className="mr-2">{r.name}</span>
+                  {r.requires_route_controls ? <span title="Requires route controls" className="align-middle">•</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default RoleSelectionsSummary;
