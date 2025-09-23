@@ -754,8 +754,8 @@ function SelectRolesPage() {
       const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
       
       const copyIntent = Boolean((location as any)?.state?.isCopy === true);
-      const stateRequestId = (location as any)?.state?.requestId || null;
-      const urlRequestId = (idParam as string | null);
+      // stateRequestId already declared above; reusing it.
+      // urlRequestId already derived via idParam above; reusing it.
       const effectiveIdPre = stateRequestId || urlRequestId || null;
       const isNewRequest = !effectiveIdPre;
       const isCopyFlow = !isNewRequest && copyIntent && editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
