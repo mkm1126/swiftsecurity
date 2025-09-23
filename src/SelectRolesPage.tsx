@@ -4,6 +4,7 @@
 // - legacy suffix fallback when hydrating booleans from DB
 // - shouldUnregister:false so hidden/conditionally rendered fields persist
 // - requestId-scoped localStorage draft autosave/restore
+// - FIXED: Copy user access workflow support
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -16,6 +17,27 @@ import Header from './components/Header';
 import MultiSelect from './components/MultiSelect';
 import { businessUnits } from './lib/businessUnitData';
 
+type CopyFlowForm = {
+  startDate: string;
+  employeeName: string;
+  employeeId?: string;
+  isNonEmployee?: boolean;
+  workLocation?: string;
+  workPhone?: string;
+  email: string;
+  agencyName: string;
+  agencyCode: string;
+  justification?: string;
+  submitterName: string;
+  submitterEmail: string;
+  supervisorName: string;
+  supervisorUsername: string;
+  securityAdminName: string;
+  securityAdminUsername: string;
+  accountingDirector?: string;
+  accountingDirectorUsername?: string;
+};
+
 function SelectRolesPage() {
   // --- config ---------------------------------------------------------------
   // Flip to true because you migrated `home_business_unit` to TEXT[]
@@ -25,7 +47,6 @@ function SelectRolesPage() {
 
   // Gate autosave until all hydration layers (stable local, DB, id-scoped local) finish
   const isHydratingRef = useRef(true);
-
 
   // Helper: snake_case <-> camelCase (hoisted function declarations for safe use anywhere)
   function snakeToCamel(s: string) {
@@ -98,8 +119,6 @@ function SelectRolesPage() {
       return false;
     }
   };
-
-
 
   // Deep-coerce "on"/"off" and arrays like ["on","on"] to booleans.
   // If an array maps entirely to booleans, collapse to a single boolean (any true).
@@ -511,7 +530,6 @@ function SelectRolesPage() {
     }
   };
 
-
   // Fetch BUs by agency
   const fetchBusinessUnitsForAgency = async (agencyCode: string) => {
     try {
@@ -686,8 +704,8 @@ function SelectRolesPage() {
   }, [watch(), requestDetails]);
 
   useEffect(() => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}, []);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   // Handle saving form data when navigating back (explicit click)
   const handleBackToMainForm = () => {
@@ -711,76 +729,92 @@ function SelectRolesPage() {
     }
   };
 
-    // --- mount flow -----------------------------------------------------------
+  // --- mount flow -----------------------------------------------------------
   
-  // On mount: prefer URL param for a stable ID; load DB first, then overlay local draft.
+  // FIXED: Check for copy flow FIRST, before any requestId validation
   useEffect(() => {
-    (async () => {
-      // Check for copy flow first, before any requestId validation
-      const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
-      
-      if (isCopyFlow) {
-        const pendingFormData = localStorage.getItem('pendingFormData');
-        const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
-        const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+    const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
 
-        if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
-          setIsEditingCopiedRoles(true);
-          try {
-            const formData = JSON.parse(pendingFormData);
-            const roleData = JSON.parse(copiedRoleSelections);
-            
-            setRequestDetails({ 
-              employee_name: formData.employeeName, 
-              agency_name: formData.agencyName, 
-              agency_code: formData.agencyCode 
+    if (isCopyFlow) {
+      console.log('🔄 Copy flow detected in SelectRolesPage');
+      const pendingFormData = localStorage.getItem('pendingFormData');
+      const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+      const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+
+      if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
+        setIsEditingCopiedRoles(true);
+        try {
+          const formData: CopyFlowForm = JSON.parse(pendingFormData);
+          const roleData = JSON.parse(copiedRoleSelections);
+          
+          console.log('🔄 Loading copy flow data:', { formData, roleData });
+          
+          setRequestDetails({ 
+            employee_name: formData.employeeName, 
+            agency_name: formData.agencyName, 
+            agency_code: formData.agencyCode 
+          });
+
+          // Map copied role data to form fields
+          if (roleData) {
+            Object.entries(roleData).forEach(([key, value]) => {
+              if (typeof value === 'boolean' && value === true) {
+                // Convert snake_case to camelCase for form fields
+                const camelKey = snakeToCamel(key);
+                setValue(camelKey as any, value, { shouldDirty: false });
+              } else if (typeof value === 'string' && value.trim()) {
+                const camelKey = snakeToCamel(key);
+                setValue(camelKey as any, value, { shouldDirty: false });
+              } else if (Array.isArray(value) && value.length > 0) {
+                const camelKey = snakeToCamel(key);
+                setValue(camelKey as any, value.join(', '), { shouldDirty: false });
+              }
             });
-            
-            // Map copied role data to form fields
-            if (roleData) {
-              Object.entries(roleData).forEach(([key, value]) => {
-                if (typeof value === 'boolean' && value === true) {
-                  // Convert snake_case to camelCase for form fields
-                  const camelKey = snakeToCamel(key);
-                  setValue(camelKey as any, value as any, { shouldDirty: false });
-                } else if (typeof value === 'string' && value.trim()) {
-                  const camelKey = snakeToCamel(key);
-                  setValue(camelKey as any, value as any, { shouldDirty: false });
-                } else if (Array.isArray(value) && value.length > 0) {
-                  const camelKey = snakeToCamel(key);
-                  setValue(camelKey as any, value.join(', ') as any, { shouldDirty: false });
-                }
-              });
+
+            // Handle home_business_unit specially for MultiSelect
+            if (roleData.home_business_unit) {
+              const homeBU = Array.isArray(roleData.home_business_unit) 
+                ? roleData.home_business_unit 
+                : [roleData.home_business_unit];
+              setValue('homeBusinessUnit' as any, homeBU, { shouldDirty: false });
             }
-            
-            // Mark hydration as complete
-            setTimeout(() => {
-              isHydratingRef.current = false;
-            }, 0);
-            
-            return; // Exit early for copy flow
-          } catch (e) {
-            console.error('Error loading copy-flow data:', e);
-            toast.error('Error loading copied user data');
-            // Clean up and fall through to normal flow
-            localStorage.removeItem('editingCopiedRoles');
-            localStorage.removeItem('pendingFormData');
-            localStorage.removeItem('copiedRoleSelections');
-            localStorage.removeItem('copiedUserDetails');
           }
-        } else {
-          // Missing copy flow data, clean up and redirect
+
+          // Mark hydration as complete
+          setTimeout(() => {
+            isHydratingRef.current = false;
+          }, 100);
+
+          console.log('✅ Copy flow data loaded successfully');
+        } catch (e) {
+          console.error('Error loading copy-flow data:', e);
+          toast.error('Error loading copied user data');
+          // Clean up and redirect
           localStorage.removeItem('editingCopiedRoles');
           localStorage.removeItem('pendingFormData');
           localStorage.removeItem('copiedRoleSelections');
           localStorage.removeItem('copiedUserDetails');
-          toast.error('Copy flow data is incomplete. Please try again.');
           navigate('/');
-          return;
         }
+      } else {
+        // Missing copy flow data, clean up and redirect
+        console.error('Copy flow data is incomplete:', { 
+          hasPendingFormData: !!pendingFormData,
+          hasCopiedRoleSelections: !!copiedRoleSelections,
+          hasCopiedUserDetails: !!copiedUserDetails
+        });
+        localStorage.removeItem('editingCopiedRoles');
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
+        toast.error('Copy flow data is incomplete. Please try again.');
+        navigate('/');
       }
-      
-      // Normal flow: check for requestId
+      return; // Exit early for copy flow
+    }
+
+    // Normal flow: check for requestId
+    (async () => {
       const stateRequestId = (location as any)?.state?.requestId;
       const effectiveId = stateRequestId || (idParam as string | null);
   
@@ -818,6 +852,93 @@ function SelectRolesPage() {
 
   // Submit
   const onSubmit = async (data: SecurityRoleSelection) => {
+    // Handle copy flow submission
+    if (isEditingCopiedRoles) {
+      const pendingFormData = localStorage.getItem('pendingFormData');
+      if (!pendingFormData) {
+        toast.error('No pending form data found');
+        return;
+      }
+
+      setSaving(true);
+      try {
+        const formData: CopyFlowForm = JSON.parse(pendingFormData);
+        const pocUser = localStorage.getItem('pocUserName');
+
+        // Create new request
+        const requestPayload = {
+          start_date: formData.startDate,
+          employee_name: formData.employeeName,
+          employee_id: formData.employeeId || null,
+          is_non_employee: !!formData.isNonEmployee,
+          work_location: formData.workLocation || null,
+          work_phone: formData.workPhone ? formData.workPhone.replace(/\D/g, '') : null,
+          email: formData.email,
+          agency_name: formData.agencyName,
+          agency_code: formData.agencyCode,
+          justification: formData.justification || null,
+          submitter_name: formData.submitterName,
+          submitter_email: formData.submitterEmail,
+          supervisor_name: formData.supervisorName,
+          supervisor_email: formData.supervisorUsername,
+          security_admin_name: formData.securityAdminName,
+          security_admin_email: formData.securityAdminUsername,
+          status: 'pending',
+          poc_user: pocUser,
+        };
+
+        const { data: newRequest, error: requestError } = await supabase
+          .from('security_role_requests')
+          .insert(requestPayload)
+          .select()
+          .single();
+
+        if (requestError) throw requestError;
+
+        // Create security area
+        const { error: areasError } = await supabase
+          .from('security_areas')
+          .insert({
+            request_id: newRequest.id,
+            area_type: 'accounting_procurement',
+            director_name: formData.accountingDirector || null,
+            director_email: formData.accountingDirectorUsername || null,
+          });
+
+        if (areasError) throw areasError;
+
+        // Build and save role selections
+        const roleSelectionPayload = buildRoleSelectionData(newRequest.id, data, {
+          homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
+        });
+
+        const cleaned = coerceBooleansDeep(roleSelectionPayload);
+        const normalized = normalizeRoleFlagsTrueOnly(cleaned);
+
+        const { error: selectionsError } = await supabase
+          .from('security_role_selections')
+          .insert(normalized);
+
+        if (selectionsError) throw selectionsError;
+
+        // Clean up copy flow data
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('editingCopiedRoles');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
+
+        toast.success('Role selections saved successfully!');
+        navigate('/success', { state: { requestId: newRequest.id } });
+      } catch (error: any) {
+        console.error('Error saving copy flow role selections:', error);
+        toast.error(`Failed to save role selections: ${error?.message || 'Unknown error'}`);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    // Normal flow validation
     // Require at least one BU
     const homeVal: any = (data as any).homeBusinessUnit;
     if (!homeVal || (Array.isArray(homeVal) && homeVal.length === 0)) {
