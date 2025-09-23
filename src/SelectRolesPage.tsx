@@ -1,218 +1,17 @@
 // src/SelectRolesPage.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+// Complete version with all role selection tables and copy user functionality
+
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
-import {
-  ArrowLeft,
-  Save,
-  AlertTriangle,
-  Calculator,
-  DollarSign,
-  FileText,
-  TrendingUp,
-  Package,
-  ShoppingCart,
-  Users,
-  Building,
-  Clipboard,
-  Settings,
-  Database,
-  Shield,
-  CheckCircle,
-  Info,
-  Copy,
-  Edit,
-} from 'lucide-react';
+import { ArrowLeft, Save, Calculator, Copy } from 'lucide-react';
 import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { toast } from 'sonner';
+import { SecurityRoleSelection } from './types';
 import Header from './components/Header';
 import MultiSelect from './components/MultiSelect';
 import UserSelect from './components/UserSelect';
 import { businessUnits } from './lib/businessUnitData';
-
-// Form data interface matching the database schema
-interface SecurityRoleSelection {
-  // Business Unit Details
-  homeBusinessUnit: string | string[];
-  otherBusinessUnits: string[];
-
-  // Accounts Payable
-  voucherEntry: boolean;
-  voucherApprover1: string[];
-  voucherApprover2: string[];
-  voucherApprover3: string[];
-  maintenanceVoucherBuildErrors: boolean;
-  matchOverride: boolean;
-  apInquiryOnly: boolean;
-  apWorkflowApprover: boolean;
-  apWorkflowRouteControls: string[];
-
-  // New AP fields
-  apVoucherApprover1: boolean;
-  apVoucherApprover2: boolean;
-  apVoucherApprover3: boolean;
-  apVoucherApprover1RouteControls: string[];
-  apVoucherApprover2RouteControls: string[];
-  apVoucherApprover3RouteControls: string[];
-
-  // Accounts Receivable and Cash Management
-  cashMaintenance: boolean;
-  receivableSpecialist: boolean;
-  receivableSupervisor: boolean;
-  writeoffApprovalBusinessUnits: string[];
-  billingCreate: boolean;
-  billingSpecialist: boolean;
-  billingSupervisor: boolean;
-  creditInvoiceApprovalBusinessUnits: string[];
-  customerMaintenanceSpecialist: boolean;
-  arBillingSetup: boolean;
-  arBillingInquiryOnly: boolean;
-  cashManagementInquiryOnly: boolean;
-
-  // Budgets/Commitment Control & Appropriation Maintenance
-  budgetJournalEntryOnline: boolean;
-  budgetJournalLoad: boolean;
-  journalApprover: boolean;
-  appropriationSources: string[];
-  expenseBudgetSource: string[];
-  revenueBudgetSource: string[];
-  budgetTransferEntryOnline: boolean;
-  transferApprover: boolean;
-  transferAppropriationSources: string[];
-  budgetInquiryOnly: boolean;
-
-  // General Ledger and NVISION Reporting
-  journalEntryOnline: boolean;
-  journalLoad: boolean;
-  agencyChartfieldMaintenance: boolean;
-  glAgencyApprover: boolean;
-  glAgencyApproverSources: string[];
-  generalLedgerInquiryOnly: boolean;
-  nvisionReportingAgencyUser: boolean;
-  needsDailyReceiptsReport: boolean;
-
-  // Grants
-  awardDataEntry: boolean;
-  grantFiscalManager: boolean;
-  programManager: boolean;
-  gmAgencySetup: boolean;
-  grantsInquiryOnly: boolean;
-
-  // Project Costing
-  federalProjectInitiator: boolean;
-  oimInitiator: boolean;
-  projectInitiator: boolean;
-  projectManager: boolean;
-  capitalProgramsOffice: boolean;
-  projectCostAccountant: boolean;
-  projectFixedAsset: boolean;
-  categorySubcategoryManager: boolean;
-  projectControlDates: boolean;
-  projectAccountingSystems: boolean;
-  mndotProjectsInquiry: boolean;
-  projectsInquiryOnly: boolean;
-  mndotProjectApprover: boolean;
-  routeControl: string[];
-
-  // Cost Allocation
-  costAllocationInquiryOnly: boolean;
-
-  // Asset Management
-  financialAccountantAssets: boolean;
-  assetManagementInquiryOnly: boolean;
-  physicalInventoryApproval1: boolean;
-  physicalInventoryBusinessUnits: string[];
-  physicalInventoryApproval2: boolean;
-  physicalInventoryDepartmentIds: string[];
-
-  // Inventory (IN)
-  inventoryExpressIssue: boolean;
-  inventoryAdjustmentApprover: boolean;
-  inventoryReplenishmentBuyer: boolean;
-  inventoryControlWorker: boolean;
-  inventoryExpressPutaway: boolean;
-  inventoryFulfillmentSpecialist: boolean;
-  inventoryPoReceiver: boolean;
-  inventoryReturnsReceiver: boolean;
-  inventoryCostAdjustment: boolean;
-  inventoryMaterialsManager: boolean;
-  inventoryDelivery: boolean;
-  inventoryInquiryOnly: boolean;
-  inventoryConfigurationAgency: boolean;
-  inventoryPickPlanReportDistribution: boolean;
-  shipToLocation: string[];
-  inventoryBusinessUnits: string[];
-
-  // Purchase Orders (PO)
-  poApprover: boolean;
-  poApprover2: boolean;
-  poApprover3: boolean;
-  poApproverLimit1: string[];
-  poApproverLimit2: string[];
-  poApproverLimit3: string[];
-  poApproverRouteControls: string[];
-  poDataEntry: boolean;
-  poDataEntryOrigin: string[];
-  poDataEntryShipTo: string[];
-  poInquiryOnly: boolean;
-  poLocationCode: string[];
-  poOrigin: string[];
-  poShipTo: string[];
-  poEproBuyer: boolean;
-  eproFund: string[];
-  eproAgencyCost1: string[];
-  eproAppropriationId: string[];
-  eproFinDepartmentId: string[];
-
-  // Vendor Management
-  vendorInquiryOnly: boolean;
-  vendorMaintenance: boolean;
-  vendorApproval: boolean;
-  vendorSetup: boolean;
-
-  // Strategic Sourcing (SS)
-  ssEventCreatorBuyer: boolean;
-  ssEventCollaborator: boolean;
-  ssEventApprover: boolean;
-  ssEventInquiryOnly: boolean;
-  ssTechCoordApprover: boolean;
-  ssTechStateApprover: boolean;
-  ssBusinessUnits: string[];
-  ssSelectedOrigins: string[];
-  ssDefaultOrigin: string[];
-  ssAllOrigins: boolean;
-
-  // Contract Management
-  contractEncumbrance: boolean;
-  scAgreementManager: boolean;
-  scDocApproverOrigin: string[];
-  scElectronicDocsYes: boolean;
-  scElectronicDocsNo: boolean;
-  scOtherEmployeeIds: string[];
-
-  // Procurement Cards (P-Card)
-  pCardApprover: boolean;
-  pCardReviewer: boolean;
-  pCardReconciler: boolean;
-
-  // Central Goods (CG)
-  cgCatalogOwner: boolean;
-  cgInquiryOnly: boolean;
-  coreOrderReceiver: boolean;
-
-  // Additional fields
-  addAccessType: string;
-  agencyCodes: string[];
-  departmentId: string[];
-  prohibitedDepartmentIds: string[];
-  deleteAccessCodes: string[];
-
-  // Role justification
-  roleJustification: string;
-
-  // Approval acknowledgment
-  supervisorApproval: boolean;
-}
 
 interface User {
   employee_name: string;
@@ -242,373 +41,566 @@ type CopyFlowForm = {
   accountingDirectorUsername?: string;
 };
 
-// Business unit options for MultiSelect
-const businessUnitOptions = businessUnits.map(unit => ({
-  value: unit.businessUnit,
-  label: `${unit.description} (${unit.businessUnit})`
-}));
-
-// Helper function to check if we're in copy flow mode
-const isCopyFlowMode = () => {
-  const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
-  const pendingFormData = localStorage.getItem('pendingFormData');
-  const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
-  
-  return editingCopiedRoles && pendingFormData && copiedRoleSelections;
-};
-
-// Helper function to clear copy flow data
-const clearCopyFlowData = () => {
-  localStorage.removeItem('editingCopiedRoles');
-  localStorage.removeItem('pendingFormData');
-  localStorage.removeItem('copiedRoleSelections');
-  localStorage.removeItem('copiedUserDetails');
-};
-
 function SelectRolesPage() {
+  // --- config ---------------------------------------------------------------
+  // Flip to true because you migrated `home_business_unit` to TEXT[]
+  const HOME_BU_IS_ARRAY = true;
+
+  // --- helpers --------------------------------------------------------------
+
+  // Gate autosave until all hydration layers (stable local, DB, id-scoped local) finish
+  const isHydratingRef = useRef(true);
+
+  // Helper: snake_case <-> camelCase (hoisted function declarations for safe use anywhere)
+  function snakeToCamel(s: string) {
+    return s.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
+  }
+  function camelToSnake(s: string) {
+    return s.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
+  }
+
+  // Draft storage key (stable per request)
+  const draftKey = (id: string) => `selectRoles_draft_${id}`;
+  
+  // Stable localStorage key based on person + agency (so drafts survive new request IDs)
+  const stableStorageKey = (
+    details?: { employee_name?: string; agency_name?: string } | null
+  ) => {
+    const d = details ?? requestDetails;
+    if (!d?.employee_name || !d?.agency_name) return null;
+    return `selectRoles_${d.employee_name}_${d.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
+  };
+
+  // Try to restore from the stable local draft (returns true if applied)
+  const restoreFromStableDraft = (): boolean => {
+    const sk = stableStorageKey();
+    if (!sk) return false;
+    const localJson = localStorage.getItem(sk);
+    console.log('🔍 Checking for saved Select Roles form data:', { storageKey: sk, hasSavedData: !!localJson });
+    if (!localJson) return false;
+    try {
+      const data = JSON.parse(localJson);
+      for (const [k, v] of Object.entries(data)) {
+        const isText = /Justification$/.test(k);
+        const typed: any = isText ? String((v as any) ?? '') : v;
+        // RHF will store unregistered field values until the input registers
+        setValue(k as any, typed as any, { shouldDirty: false });
+      }
+
+      console.log('📥 Restored Select Roles from saved data (stable key).');
+      toast.success('Previous selections restored');
+      return true;
+    } catch (e) {
+      console.error('Error parsing saved Select Roles data (stable key):', e);
+      localStorage.removeItem(sk);
+      return false;
+    }
+  };
+
+  // Try to restore from the stable local draft using explicit details (avoids waiting for React state)
+  const restoreFromStableDraftFor = (
+    details: { employee_name?: string; agency_name?: string } | null
+  ): boolean => {
+    const sk = stableStorageKey(details);
+    if (!sk) return false;
+    const localJson = localStorage.getItem(sk);
+    console.log('🔍 Checking for saved Select Roles form data (explicit):', { storageKey: sk, hasSavedData: !!localJson });
+    if (!localJson) return false;
+    try {
+      const data = JSON.parse(localJson);
+      for (const [k, v] of Object.entries(data)) {
+        const isText = /Justification$/.test(k);
+        const typed: any = isText ? String((v as any) ?? '') : v;
+        setValue(k as any, typed as any, { shouldDirty: false });
+      }
+      console.log('📥 Restored Select Roles from saved data (stable key, explicit details).');
+      toast.success('Previous selections restored');
+      return true;
+    } catch (e) {
+      console.error('Error parsing saved Select Roles data (stable key explicit):', e);
+      localStorage.removeItem(sk);
+      return false;
+    }
+  };
+
+  // Apply a local draft (if present) on top of whatever we already loaded
+  const restoreFromLocalDraft = (id: string) => {
+    try {
+      const raw = localStorage.getItem(draftKey(id));
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as { ts: number; data: Record<string, any> };
+      if (!parsed || !parsed.data) return;
+
+      const entries = Object.entries(parsed.data);
+      
+      entries.forEach(([k, v]) => {
+        if (k === 'homeBusinessUnit') {
+          const asArray = Array.isArray(v) ? v : v ? [v] : [];
+          setValue('homeBusinessUnit' as any, asArray as any, { shouldDirty: true });
+        } else {
+          setValue(k as any, v as any, { shouldDirty: true });
+        }
+      });
+      
+      // 👇 Ensure UI mirrors id-scoped draft values
+      setTimeout(() => {
+        const snap = getValues();
+        reset(snap);
+        console.log('🔁 Synced (id-scoped draft) values to UI with reset():', snap);
+      }, 0);
+      
+      console.log('🧩 Restored local draft for', id, parsed);
+      toast.message('Restored unsaved role selections from this device.');
+
+    } catch (e) {
+      console.warn('Could not restore local draft:', e);
+    }
+  };
+
+  // Deep-coerce "on"/"off" and arrays like ["on","on"] to booleans.
+  // If an array maps entirely to booleans, collapse to a single boolean (any true).
+  const coerceBooleansDeep = (value: any): any => {
+    if (value === 'on') return true;
+    if (value === 'off') return false;
+
+    if (Array.isArray(value)) {
+      const mapped = value.map(coerceBooleansDeep);
+      if (mapped.length > 0 && mapped.every((v) => typeof v === 'boolean')) {
+        return mapped.some(Boolean);
+      }
+      return mapped;
+    }
+
+    if (value && typeof value === 'object') {
+      const out: any = {};
+      for (const [k, v] of Object.entries(value)) out[k] = coerceBooleansDeep(v);
+      return out;
+    }
+
+    return value;
+  };
+
+  // Strip leading two-letter prefixes (e.g., "ss_", "sc_") — used only for legacy fallback mapping
+  const strip2 = (k: string) => k.replace(/^[a-z]{2}_/, '');
+
+  // ✅ Normalize for DB write:
+  // - Keep original snake_case keys (including 2-letter prefixes) for boolean flags
+  // - Only persist TRUE flags; drop false/unknown
+  // - Preserve non-boolean fields as-is
+  function normalizeRoleFlagsTrueOnly<T extends Record<string, any>>(flags: T) {
+    const out: Record<string, any> = {};
+    for (const [key, val] of Object.entries(flags)) {
+      if (typeof val === 'boolean') {
+        if (val === true) out[key] = true; // keep exact key name (prefix preserved)
+      } else {
+        out[key] = val; // keep non-boolean fields (strings/arrays/nulls)
+      }
+    }
+    return out as T;
+  }
+
+  // Parse multi-entry text -> array of fixed-length codes (uppercased, A-Z0-9)
+  const splitCodes = (val: string | null | undefined, codeLen: number) => {
+    if (!val) return [] as string[];
+    return String(val)
+      .split(/[\s,;\n\r]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => s.toUpperCase())
+      .map((s) => s.replace(/[^A-Z0-9]/g, ''))
+      .filter((s) => s.length === codeLen);
+  };
+
+  // Build a single payload that matches your updated schema (TEXT[] where applicable)
+  const buildRoleSelectionData = (
+    request_id: string,
+    data: SecurityRoleSelection,
+    options?: { homeBusinessUnitIsArray?: boolean }
+  ) => {
+    // Other BUs (5-char codes) now TEXT[]
+    const otherBUs = splitCodes((data as any).otherBusinessUnits, 5);
+
+    // AP workflow (8-char Financial Dept IDs)
+    const ap1Depts = splitCodes((data as any).apVoucherApprover1RouteControls, 8);
+    const ap2Depts = splitCodes((data as any).apVoucherApprover2RouteControls, 8);
+    const ap3Depts = splitCodes((data as any).apVoucherApprover3RouteControls, 8);
+
+    // AR supervisors (5-char BUs)
+    const arCreditBUs = splitCodes((data as any).creditInvoiceApprovalBusinessUnits, 5);
+    const arWriteoffBUs = splitCodes((data as any).writeoffApprovalBusinessUnits, 5);
+
+    // KK approver workflow (5-char BUs)
+    const kkAppropriation = splitCodes((data as any).journalApprovalA, 5);
+    const kkTransfer = splitCodes((data as any).transferApproval, 5);
+    const kkExpense = splitCodes((data as any).journalApprovalExpense, 5);
+    const kkRevenue = splitCodes((data as any).journalApprovalRevenue, 5);
+
+    // AM workflow
+    const amBUs = splitCodes((data as any).physicalInventoryBusinessUnits, 5);
+    const amDept = splitCodes((data as any).physicalInventoryDepartmentIds, 8);
+
+    // GL workflow (3-char agency codes)
+    const glSources = splitCodes((data as any).glAgencyApproverSources, 3);
+
+    // PO Approver (8-char Financial Dept IDs)
+    const poApproverRoute = splitCodes((data as any).poApproverRouteControls, 8);
+
+    // GL Daily Receipts derived boolean (Yes/No checkboxes)
+    const needsDailyReceiptsReport =
+      (data as any).needsDailyReceiptsYes ? true : (data as any).needsDailyReceiptsNo ? false : false;
+
+    // If you migrated home_business_unit to TEXT[], send an array; else keep comma string
+    const isArray = !!options?.homeBusinessUnitIsArray;
+    const homeBUInput: any = (data as any).homeBusinessUnit;
+    const homeBUValue = Array.isArray(homeBUInput)
+      ? isArray
+        ? homeBUInput
+        : homeBUInput.join(',')
+      : isArray
+      ? homeBUInput
+        ? [homeBUInput]
+        : []
+      : homeBUInput || '';
+
+    const toOrNull = (arr: string[]) => (arr.length ? arr : null);
+
+    // Auto-generated: persist additional Accounting/Procurement checkbox flags
+    const EXTRA_ACCOUNTING_PROCUREMENT_FLAGS = {
+      needs_daily_receipts_yes: (data as any).needsDailyReceiptsYes || false,
+      needs_daily_receipts_no: (data as any).needsDailyReceiptsNo || false,
+
+      physical_inventory_approval_1: (data as any).physicalInventoryApproval1 || false,
+      physical_inventory_approval_2: (data as any).physicalInventoryApproval2 || false,
+
+      vendor_request_add_update: (data as any).vendorRequestAddUpdate || false,
+      vendor_inquiry_only: (data as any).vendorInquiryOnly || false,
+
+      po_epro_buyer: (data as any).poEproBuyer || false,
+      contract_encumbrance: (data as any).contractEncumbrance || false,
+      purchase_order_data_entry: (data as any).purchaseOrderDataEntry || false,
+      epro_requisition_requester: (data as any).eproRequisitionRequester || false,
+      po_accounting_coordinator: (data as any).poAccountingCoordinator || false,
+      core_order_receiver: (data as any).coreOrderReceiver || false,
+      po_inquiry_only: (data as any).poInquiryOnly || false,
+      epro_requisition_inquiry_only: (data as any).eproRequisitionInquiryOnly || false,
+      po_approver: (data as any).poApprover || false,
+
+      ss_event_creator_buyer: (data as any).ssEventCreatorBuyer || false,
+      ss_create_vendor_response: (data as any).ssCreateVendorResponse || false,
+      ss_event_approver: (data as any).ssEventApprover || false,
+      ss_event_collaborator: (data as any).ssEventCollaborator || false,
+      ss_event_inquiry_only: (data as any).ssEventInquiryOnly || false,
+      ss_all_origins: (data as any).ssAllOrigins || false,
+      ss_tech_coord_approver: (data as any).ssTechCoordApprover || false,
+      ss_tech_state_approver: (data as any).ssTechStateApprover || false,
+      ss_grant_coord_approver: (data as any).ssGrantCoordApprover || false,
+
+      cg_catalog_owner: (data as any).cgCatalogOwner || false,
+      cg_inquiry_only: (data as any).cgInquiryOnly || false,
+
+      sc_contract_administrator: (data as any).scContractAdministrator || false,
+      sc_document_administrator: (data as any).scDocumentAdministrator || false,
+      sc_document_collaborator: (data as any).scDocumentCollaborator || false,
+      sc_agreement_manager: (data as any).scAgreementManager || false,
+      sc_agency_library_manager: (data as any).scAgencyLibraryManager || false,
+      sc_contract_inquiry_only: (data as any).scContractInquiryOnly || false,
+      sc_contractual_approver: (data as any).scContractualApprover || false,
+      sc_electronic_docs_yes: (data as any).scElectronicDocsYes || false,
+      sc_electronic_docs_no: (data as any).scElectronicDocsNo || false,
+      sc_doc_contract_coordinator: (data as any).scDocContractCoordinator || false,
+
+      inventory_express_issue: (data as any).inventoryExpressIssue || false,
+      inventory_adjustment_approver: (data as any).inventoryAdjustmentApprover || false,
+      inventory_replenishment_buyer: (data as any).inventoryReplenishmentBuyer || false,
+      inventory_control_worker: (data as any).inventoryControlWorker || false,
+      inventory_express_putaway: (data as any).inventoryExpressPutaway || false,
+      inventory_fulfillment_specialist: (data as any).inventoryFulfillmentSpecialist || false,
+      inventory_po_receiver: (data as any).inventoryPoReceiver || false,
+      inventory_returns_receiver: (data as any).inventoryReturnsReceiver || false,
+      inventory_cost_adjustment: (data as any).inventoryCostAdjustment || false,
+      inventory_materials_manager: (data as any).inventoryMaterialsManager || false,
+      inventory_delivery: (data as any).inventoryDelivery || false,
+      inventory_inquiry_only: (data as any).inventoryInquiryOnly || false,
+      inventory_configuration_agency: (data as any).inventoryConfigurationAgency || false,
+      inventory_pick_plan_distribution_release: (data as any).inventoryPickPlanDistributionRelease || false,
+    } as const;
+
+    return {
+      request_id,
+
+      // If TEXT[] now, this should be an array; otherwise a comma string
+      home_business_unit: homeBUValue,
+
+      // If you migrated this to TEXT[] too, store as array; otherwise change to join(',')
+      other_business_units: toOrNull(otherBUs),
+
+      ...EXTRA_ACCOUNTING_PROCUREMENT_FLAGS,
+
+      // ===== Plain booleans/text (unchanged types) =====
+      voucher_entry: (data as any).voucherEntry || false,
+      maintenance_voucher_build_errors: (data as any).maintenanceVoucherBuildErrors || false,
+      match_override: (data as any).matchOverride || false,
+      ap_inquiry_only: (data as any).apInquiryOnly || false,
+
+      cash_maintenance: (data as any).cashMaintenance || false,
+      receivable_specialist: (data as any).receivableSpecialist || false,
+      receivable_supervisor: (data as any).receivableSupervisor || false,
+      billing_create: (data as any).billingCreate || false,
+      billing_specialist: (data as any).billingSpecialist || false,
+      billing_supervisor: (data as any).billingSupervisor || false,
+      customer_maintenance_specialist: (data as any).customerMaintenanceSpecialist || false,
+      ar_billing_setup: (data as any).arBillingSetup || false,
+      ar_billing_inquiry_only: (data as any).arBillingInquiryOnly || false,
+      cash_management_inquiry_only: (data as any).cashManagementInquiryOnly || false,
+
+      budget_journal_entry_online: (data as any).budgetJournalEntryOnline || false,
+      budget_journal_load: (data as any).budgetJournalLoad || false,
+
+      // ✅ three distinct journal approver booleans
+      journal_approver_appr: (data as any).journalApproverAppr || false,
+      journal_approver_exp: (data as any).journalApproverExp || false,
+      journal_approver_rev: (data as any).journalApproverRev || false,
+
+      budget_transfer_entry_online: (data as any).budgetTransferEntryOnline || false,
+      transfer_approver: (data as any).transferApprover || false,
+      budget_inquiry_only: (data as any).budgetInquiryOnly || false,
+
+      journal_entry_online: (data as any).journalEntryOnline || false,
+      journal_load: (data as any).journalLoad || false,
+      agency_chartfield_maintenance: (data as any).agencyChartfieldMaintenance || false,
+      gl_agency_approver: (data as any).glAgencyApprover || false,
+      general_ledger_inquiry_only: (data as any).generalLedgerInquiryOnly || false,
+      nvision_reporting_agency_user: (data as any).nvisionReportingAgencyUser || false,
+
+      // ✅ derived from Yes/No UI
+      needs_daily_receipts_report: needsDailyReceiptsReport,
+
+      award_data_entry: (data as any).awardDataEntry || false,
+      grant_fiscal_manager: (data as any).grantFiscalManager || false,
+      program_manager: (data as any).programManager || false,
+      gm_agency_setup: (data as any).gmAgencySetup || false,
+      grants_inquiry_only: (data as any).grantsInquiryOnly || false,
+
+      federal_project_initiator: (data as any).federalProjectInitiator || false,
+      oim_initiator: (data as any).oimInitiator || false,
+      project_initiator: (data as any).projectInitiator || false,
+      project_manager: (data as any).projectManager || false,
+      capital_programs_office: (data as any).capitalProgramsOffice || false,
+      project_cost_accountant: (data as any).projectCostAccountant || false,
+      project_fixed_asset: (data as any).projectFixedAsset || false,
+      category_subcategory_manager: (data as any).categorySubcategoryManager || false,
+      project_control_dates: (data as any).projectControlDates || false,
+      project_accounting_systems: (data as any).projectAccountingSystems || false,
+      mndot_projects_inquiry: (data as any).mndotProjectsInquiry || false,
+      projects_inquiry_only: (data as any).projectsInquiryOnly || false,
+      mndot_project_approver: (data as any).mndotProjectApprover || false,
+      route_control: (data as any).routeControl || null,
+
+      cost_allocation_inquiry_only: (data as any).costAllocationInquiryOnly || false,
+
+      financial_accountant_assets: (data as any).financialAccountantAssets || false,
+      asset_management_inquiry_only: (data as any).assetManagementInquiryOnly || false,
+
+      role_justification: (data as any).roleJustification || null,
+
+      // ===== ARRAY columns (TEXT[]) =====
+      // AP route controls
+      ap_voucher_approver_1: (data as any).apVoucherApprover1 || false,
+      ap_voucher_approver_2: (data as any).apVoucherApprover2 || false,
+      ap_voucher_approver_3: (data as any).apVoucherApprover3 || false,
+      ap_voucher_approver_1_route_controls: toOrNull(ap1Depts),
+      ap_voucher_approver_2_route_controls: toOrNull(ap2Depts),
+      ap_voucher_approver_3_route_controls: toOrNull(ap3Depts),
+
+      // AR/CM supervisors route controls
+      credit_invoice_approval_business_units: toOrNull(arCreditBUs),
+      writeoff_approval_business_units: toOrNull(arWriteoffBUs),
+
+      // KK workflow route controls
+      appropriation_sources: toOrNull(kkAppropriation),
+      transfer_appropriation_sources: toOrNull(kkTransfer),
+      expense_budget_source: toOrNull(kkExpense),
+      revenue_budget_source: toOrNull(kkRevenue),
+
+      // AM workflow
+      physical_inventory_business_units: toOrNull(amBUs),
+      physical_inventory_department_ids: toOrNull(amDept),
+
+      // GL workflow
+      gl_agency_approver_sources: toOrNull(glSources),
+
+      // PO Approver route controls (TEXT[])
+      po_approver_route_controls: toOrNull(poApproverRoute),
+
+      // Optional JSON snapshot (handy for troubleshooting)
+      role_selection_json: {
+        ...(data as any),
+        _parsed_multi: {
+          ap1Depts,
+          ap2Depts,
+          ap3Depts,
+          arCreditBUs,
+          arWriteoffBUs,
+          kkAppropriation,
+          kkTransfer,
+          kkExpense,
+          kkRevenue,
+          amBUs,
+          amDept,
+          glSources,
+          poApproverRoute,
+        },
+      },
+    };
+  };
+
+  // Daily Receipts toggle helper
+  const setDailyReceipts = (answer: 'yes' | 'no') => {
+    if (answer === 'yes') {
+      setValue('needsDailyReceiptsYes' as any, true, { shouldDirty: true });
+      setValue('needsDailyReceiptsNo' as any, false, { shouldDirty: true });
+    } else {
+      setValue('needsDailyReceiptsYes' as any, false, { shouldDirty: true });
+      setValue('needsDailyReceiptsNo' as any, true, { shouldDirty: true });
+    }
+  };
+
+  const rcInputClasses =
+    'w-56 h-10 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm placeholder:text-gray-400';
+  const inputStd =
+    'h-10 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm placeholder:text-gray-400';
+
+  // --- state & form ---------------------------------------------------------
+
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const navigate = useNavigate();
-  const location = useLocation() as { state?: { requestId?: string } };
-  const { id: idParam } = useParams();
+  const location = useLocation();
+  const { id: idParam } = useParams<{ id: string }>(); // ✅ prefer URL param as the single source of truth
 
   const [saving, setSaving] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
-  const [requestDetails, setRequestDetails] = useState<{
-    employee_name?: string;
-    agency_name?: string;
-    agency_code?: string;
-  } | null>(null);
-  const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [requestDetails, setRequestDetails] = useState<any>(null);
+  const [loadingExistingData, setLoadingExistingData] = useState(false);
+  const [availableBusinessUnits, setAvailableBusinessUnits] = useState<any[]>([]);
+  const [hasExistingDbSelections, setHasExistingDbSelections] = useState(false);
+  const [restoredFromLocalStorage, setRestoredFromLocalStorage] = useState(false);
+  const homeBusinessUnitRef = useRef<HTMLDivElement | null>(null);
 
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
+    setError,
+    clearErrors,
+    getValues,
     formState: { errors },
   } = useForm<SecurityRoleSelection>({
     defaultValues: {
-      homeBusinessUnit: '',
-      otherBusinessUnits: [],
-      
-      // Accounts Payable defaults
-      voucherEntry: false,
-      voucherApprover1: [],
-      voucherApprover2: [],
-      voucherApprover3: [],
-      maintenanceVoucherBuildErrors: false,
-      matchOverride: false,
-      apInquiryOnly: false,
-      apWorkflowApprover: false,
-      apWorkflowRouteControls: [],
-      
-      // New AP fields
-      apVoucherApprover1: false,
-      apVoucherApprover2: false,
-      apVoucherApprover3: false,
-      apVoucherApprover1RouteControls: [],
-      apVoucherApprover2RouteControls: [],
-      apVoucherApprover3RouteControls: [],
-
-      // Accounts Receivable defaults
-      cashMaintenance: false,
-      receivableSpecialist: false,
-      receivableSupervisor: false,
-      writeoffApprovalBusinessUnits: [],
-      billingCreate: false,
-      billingSpecialist: false,
-      billingSupervisor: false,
-      creditInvoiceApprovalBusinessUnits: [],
-      customerMaintenanceSpecialist: false,
-      arBillingSetup: false,
-      arBillingInquiryOnly: false,
-      cashManagementInquiryOnly: false,
-
-      // Budget defaults
-      budgetJournalEntryOnline: false,
-      budgetJournalLoad: false,
-      journalApprover: false,
-      appropriationSources: [],
-      expenseBudgetSource: [],
-      revenueBudgetSource: [],
-      budgetTransferEntryOnline: false,
-      transferApprover: false,
-      transferAppropriationSources: [],
-      budgetInquiryOnly: false,
-
-      // General Ledger defaults
-      journalEntryOnline: false,
-      journalLoad: false,
-      agencyChartfieldMaintenance: false,
-      glAgencyApprover: false,
-      glAgencyApproverSources: [],
-      generalLedgerInquiryOnly: false,
-      nvisionReportingAgencyUser: false,
-      needsDailyReceiptsReport: false,
-
-      // Grants defaults
-      awardDataEntry: false,
-      grantFiscalManager: false,
-      programManager: false,
-      gmAgencySetup: false,
-      grantsInquiryOnly: false,
-
-      // Project Costing defaults
-      federalProjectInitiator: false,
-      oimInitiator: false,
-      projectInitiator: false,
-      projectManager: false,
-      capitalProgramsOffice: false,
-      projectCostAccountant: false,
-      projectFixedAsset: false,
-      categorySubcategoryManager: false,
-      projectControlDates: false,
-      projectAccountingSystems: false,
-      mndotProjectsInquiry: false,
-      projectsInquiryOnly: false,
-      mndotProjectApprover: false,
-      routeControl: [],
-
-      // Cost Allocation defaults
-      costAllocationInquiryOnly: false,
-
-      // Asset Management defaults
-      financialAccountantAssets: false,
-      assetManagementInquiryOnly: false,
-      physicalInventoryApproval1: false,
-      physicalInventoryBusinessUnits: [],
-      physicalInventoryApproval2: false,
-      physicalInventoryDepartmentIds: [],
-
-      // Inventory defaults
-      inventoryExpressIssue: false,
-      inventoryAdjustmentApprover: false,
-      inventoryReplenishmentBuyer: false,
-      inventoryControlWorker: false,
-      inventoryExpressPutaway: false,
-      inventoryFulfillmentSpecialist: false,
-      inventoryPoReceiver: false,
-      inventoryReturnsReceiver: false,
-      inventoryCostAdjustment: false,
-      inventoryMaterialsManager: false,
-      inventoryDelivery: false,
-      inventoryInquiryOnly: false,
-      inventoryConfigurationAgency: false,
-      inventoryPickPlanReportDistribution: false,
-      shipToLocation: [],
-      inventoryBusinessUnits: [],
-
-      // Purchase Orders defaults
-      poApprover: false,
-      poApprover2: false,
-      poApprover3: false,
-      poApproverLimit1: [],
-      poApproverLimit2: [],
-      poApproverLimit3: [],
-      poApproverRouteControls: [],
-      poDataEntry: false,
-      poDataEntryOrigin: [],
-      poDataEntryShipTo: [],
-      poInquiryOnly: false,
-      poLocationCode: [],
-      poOrigin: [],
-      poShipTo: [],
-      poEproBuyer: false,
-      eproFund: [],
-      eproAgencyCost1: [],
-      eproAppropriationId: [],
-      eproFinDepartmentId: [],
-
-      // Vendor Management defaults
-      vendorInquiryOnly: false,
-      vendorMaintenance: false,
-      vendorApproval: false,
-      vendorSetup: false,
-
-      // Strategic Sourcing defaults
-      ssEventCreatorBuyer: false,
-      ssEventCollaborator: false,
-      ssEventApprover: false,
-      ssEventInquiryOnly: false,
-      ssTechCoordApprover: false,
-      ssTechStateApprover: false,
-      ssBusinessUnits: [],
-      ssSelectedOrigins: [],
-      ssDefaultOrigin: [],
-      ssAllOrigins: false,
-
-      // Contract Management defaults
-      contractEncumbrance: false,
-      scAgreementManager: false,
-      scDocApproverOrigin: [],
-      scElectronicDocsYes: false,
-      scElectronicDocsNo: false,
-      scOtherEmployeeIds: [],
-
-      // P-Card defaults
-      pCardApprover: false,
-      pCardReviewer: false,
-      pCardReconciler: false,
-
-      // Central Goods defaults
-      cgCatalogOwner: false,
-      cgInquiryOnly: false,
-      coreOrderReceiver: false,
-
-      // Additional fields defaults
-      addAccessType: '',
-      agencyCodes: [],
-      departmentId: [],
-      prohibitedDepartmentIds: [],
-      deleteAccessCodes: [],
-
-      // Role justification
-      roleJustification: '',
-
-      // Approval
-      supervisorApproval: false,
-    },
+      homeBusinessUnit: [] as any, // array (TEXT[]) mode
+      otherBusinessUnits: '' as any,
+    } as any,
+    shouldUnregister: false, // ✅ keep hidden/unmounted field values
   });
 
+  // Watchers (watch the whole form for autosave)
   const selectedRoles = watch();
 
-  // Check if any roles are selected
-  const hasSelectedRoles = useMemo(() => {
-    const values = watch();
-    return Object.entries(values).some(([key, value]) => {
-      if (key === 'supervisorApproval' || key === 'roleJustification') return false;
-      if (typeof value === 'boolean') return value;
-      if (Array.isArray(value)) return value.length > 0;
-      if (typeof value === 'string') return value.trim() !== '';
-      return false;
+  const hasSelectedRoles = React.useMemo(() => {
+    return Object.entries(selectedRoles || {}).some(
+      ([, value]) => typeof value === 'boolean' && value === true
+    );
+  }, [selectedRoles]);
+
+  // BU options
+  const businessUnitOptions = React.useMemo(() => {
+    const agencyCode = requestDetails?.agency_code;
+    if (!agencyCode) {
+      return businessUnits.map((unit) => ({
+        value: unit.businessUnit,
+        label: `${unit.description} (${unit.businessUnit})`,
+      }));
+    }
+    const filteredUnits = businessUnits.filter((unit) => unit.businessUnit.startsWith(agencyCode));
+    return filteredUnits.map((unit) => ({
+      value: unit.businessUnit,
+      label: `${unit.description} (${unit.businessUnit})`,
+    }));
+  }, [requestDetails?.agency_code]);
+
+  // BU change
+  const handleBusinessUnitChange = (selectedCodes: string[]) => {
+    setValue('homeBusinessUnit' as any, selectedCodes, {
+      shouldValidate: true,
+      shouldDirty: true,
     });
-  }, [watch]);
+    clearErrors('homeBusinessUnit' as any);
+  };
 
-  // Auto-save form data when it changes (but not during copy flow)
-  useEffect(() => {
-    if (!requestDetails || isCopyFlowMode()) return;
+  const handleUserChange = (user: User | null) => {
+    setSelectedUser(user);
+  };
 
-    const timeoutId = setTimeout(() => {
-      const formData = watch();
-      if (Object.keys(formData).length === 0) return;
+  // --- data fetching --------------------------------------------------------
 
-      const storageKey = `selectRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
-      localStorage.setItem(storageKey, JSON.stringify(formData));
-      console.log('💾 Auto-saving Select Roles form data:', { storageKey, formData });
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [watch(), requestDetails]);
-
-  useEffect(() => {
-    // Check if we're in copy flow mode
-    if (isCopyFlowMode()) {
-      console.log('🔧 Copy flow detected');
-      setIsEditingCopiedRoles(true);
-      
-      try {
-        const pendingFormData = localStorage.getItem('pendingFormData');
-        const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
-        
-        if (pendingFormData && copiedRoleSelections) {
-          const formData: CopyFlowForm = JSON.parse(pendingFormData);
-          const roleData = JSON.parse(copiedRoleSelections);
-          
-          setRequestDetails({ 
-            employee_name: formData.employeeName, 
-            agency_name: formData.agencyName, 
-            agency_code: formData.agencyCode 
-          });
-          
-          // Map copied role data to form fields
-          if (roleData) {
-            Object.entries(roleData).forEach(([key, value]) => {
-              if (typeof value === 'boolean') {
-                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-              } else if (Array.isArray(value) && value.length > 0) {
-                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-              } else if (typeof value === 'string' && value.trim()) {
-                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-              }
-            });
-          }
-        }
-      } catch (e) {
-        console.error('Error loading copy-flow data:', e);
-        toast.error('Error loading copied user data');
-        clearCopyFlowData();
-        navigate('/');
-      }
-    } else {
-      // Normal flow - get request ID and load data
-      const stateRequestId = location.state?.requestId;
-      const effectiveId = stateRequestId || idParam;
-      
-      if (!effectiveId) {
-        toast.error('Please complete the main form first before selecting roles.');
-        navigate('/');
-        return;
-      }
-      
-      setRequestId(effectiveId);
-      fetchRequestDetails(effectiveId);
-    }
-  }, [location.state, navigate, idParam, setValue]);
-
-  // Try to restore saved form data after request details are loaded (but not during copy flow)
-  useEffect(() => {
-    if (!requestDetails || isCopyFlowMode()) return;
-
-    const storageKey = `selectRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
-    const savedData = localStorage.getItem(storageKey);
-    
-    console.log('🔍 Checking for saved Select Roles form data:', { storageKey, hasSavedData: !!savedData });
-
-    if (savedData) {
-      try {
-        const parsedData = JSON.parse(savedData);
-        console.log('📥 Restoring saved Select Roles form data:', parsedData);
-        
-        Object.entries(parsedData).forEach(([key, value]) => {
-          setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-        });
-        
-        toast.success('Previous selections restored');
-      } catch (e) {
-        console.error('Error parsing saved data:', e);
-        localStorage.removeItem(storageKey);
-      }
-    } else {
-      console.log('📡 No saved data found, fetching existing selections from Supabase');
-      if (requestId) {
-        fetchExistingSelections(requestId);
-      }
-    }
-  }, [requestDetails, setValue, requestId]);
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
-
-  async function fetchRequestDetails(id: string) {
+  // Fetch request details and return them so we can compute keys immediately
+  const fetchRequestDetails = async (
+    id: string
+  ): Promise<{ employee_name?: string; agency_name?: string; agency_code?: string } | null> => {
     try {
       const { data, error } = await supabase
         .from('security_role_requests')
         .select('employee_name, agency_name, agency_code')
-        .eq('id', id)
-        .single();
-
+        .eq('id', id);
+  
       if (error) throw error;
-      console.log('📋 Request details fetched:', data);
-      setRequestDetails(data || null);
+      const first = Array.isArray(data) ? data[0] : data;
+      setRequestDetails(first || null);
+  
+      if (first?.agency_code) {
+        await fetchBusinessUnitsForAgency(first.agency_code);
+      }
+  
+      return first || null;
     } catch (error) {
       console.error('Error fetching request details:', error);
       toast.error('Failed to load request details');
+      return null;
     }
-  }
+  };
 
-  async function fetchExistingSelections(id: string) {
+  // Fetch BUs by agency
+  const fetchBusinessUnitsForAgency = async (agencyCode: string) => {
     try {
+      const { data, error } = await supabase
+        .from('agency_business_units')
+        .select('business_unit_code, business_unit_name')
+        .eq('agency_code', agencyCode)
+        .order('business_unit_name');
+
+      if (error) throw error;
+
+      setAvailableBusinessUnits(data || []);
+    } catch (error) {
+      console.error('Error fetching business units for agency:', error);
+      const fallbackUnits = businessUnits
+        .filter((unit) => unit.businessUnit.startsWith(agencyCode))
+        .map((unit) => ({
+          business_unit_code: unit.businessUnit,
+          business_unit_name: unit.description,
+        }));
+      setAvailableBusinessUnits(fallbackUnits);
+    }
+  };
+
+  // Fetch existing saved selections and hydrate the form (for Edit flow)
+  const fetchExistingSelections = async (id: string) => {
+    try {
+      // Renamed to be more specific about what it does
       const { data, error } = await supabase
         .from('security_role_selections')
         .select('*')
@@ -616,342 +608,361 @@ function SelectRolesPage() {
         .maybeSingle();
 
       if (error) throw error;
-      if (!data) return;
 
-      console.log('📋 Existing selections fetched from Supabase:', data);
-      
-      // Map database fields to form fields
-      Object.entries(data).forEach(([key, value]) => {
-        if (key === 'id' || key === 'request_id' || key === 'created_at' || key === 'updated_at') return;
+      if (data) {        
+        console.log('📡 Found existing selections in database:', data);
+
+        // Mark that we found existing selections in the database
+        setHasExistingDbSelections(true);
         
-        try {
-          setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-        } catch (e) {
-          console.warn(`Could not set form field ${key}:`, e);
+        for (const [k, v] of Object.entries(data)) {
+          if (['id', 'request_id', 'created_at', 'updated_at', 'role_selection_json'].includes(k)) continue;
+        
+          // Arrays from DB (TEXT[]) → comma list for textareas
+          if (Array.isArray(v)) {
+            const camel = snakeToCamel(k); // e.g., ap_voucher_approver_1_route_controls -> apVoucherApprover1RouteControls
+            setValue(camel as any, v.join(', '), { shouldDirty: false });
+            continue;
+          }
+        
+          if (typeof v === 'boolean') {
+            // Only set truthy flags – mirrors how you write to DB (true-only)
+            if (v === true) {
+              const camel = snakeToCamel(k);        // e.g., sc_contract_administrator -> scContractAdministrator
+              setValue(camel as any, true as any, { shouldDirty: false });
+        
+              // Legacy fallback: if DB used a two-letter prefix, also set the suffix-mapped key just in case
+              const suffixCamel = snakeToCamel(strip2(k)); // e.g., contract_administrator -> contractAdministrator
+              if (suffixCamel !== camel) {
+                setValue(suffixCamel as any, true as any, { shouldDirty: false });
+              }
+            }
+            continue;
+          }
+        
+          // Strings / nullable
+          const camel = snakeToCamel(k);
+          setValue(camel as any, (v ?? '') as any, { shouldDirty: false });
         }
-      });
-    } catch (e) {
-      console.error('Failed to fetch existing role selections:', e);
+        
+        // Special handling for home_business_unit → MultiSelect array
+        const hbu = (data as any).home_business_unit;
+        if (hbu !== undefined) {
+          const asArray = Array.isArray(hbu)
+            ? hbu
+            : typeof hbu === 'string' && hbu
+            ? hbu.split(',').map((s) => s.trim()).filter(Boolean)
+            : [];
+          setValue('homeBusinessUnit' as any, asArray as any, { shouldDirty: false });
+          clearErrors('homeBusinessUnit' as any);
+        }
+        
+        // 👇 Force RHF to broadcast the loaded values to any inputs that only read once at mount
+        setTimeout(() => {
+          const snap = getValues();
+          reset(snap);
+          console.log('🔁 Synced form state to UI with reset() after DB hydrate:', snap);
+          console.log('📡 Loaded selections from database:', data);
+        }, 0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch existing role selections from database:', err);
     }
-  }
+  };
 
-  const onSubmit = async (form: SecurityRoleSelection) => {
-    if (!hasSelectedRoles) {
-      toast.error('Please select at least one role or mark "Supervisor Approval" to acknowledge no roles are needed.');
+  // --- local draft persistence (so Back -> return keeps selections) ---------
+
+  // Save a local draft (debounced)
+  useEffect(() => {
+    if (!requestId) return;
+    const handle = setTimeout(() => {
+      try {
+        const payload = { ts: Date.now(), data: getValues() };
+        localStorage.setItem(draftKey(requestId), JSON.stringify(payload));
+      } catch {}
+    }, 300);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestId, selectedRoles]); // watch the whole form
+
+  // Also save on pagehide as a fallback
+  useEffect(() => {
+    if (!requestId) return;
+    const saveOnHide = () => {
+      try {
+        const payload = { ts: Date.now(), data: getValues() };
+        localStorage.setItem(draftKey(requestId), JSON.stringify(payload));
+      } catch {}
+    };
+    window.addEventListener('pagehide', saveOnHide);
+    return () => window.removeEventListener('pagehide', saveOnHide);
+  }, [requestId, getValues]);
+
+  useEffect(() => {
+    if (!requestDetails || isHydratingRef.current) return; // 👈 don't autosave while hydrating
+    const timeoutId = setTimeout(() => {
+      const formData = watch();
+      if (!formData || Object.keys(formData).length === 0) return;
+      const sk = stableStorageKey();
+      if (!sk) return;
+      localStorage.setItem(sk, JSON.stringify(formData));
+      console.log('💾 Auto-saving Select Roles form data:', { storageKey: sk, formData });
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [watch(), requestDetails]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  // Handle saving form data when navigating back (explicit click)
+  const handleBackToMainForm = () => {
+    if (requestId) {
+      const currentFormData = getValues();
+      localStorage.setItem(
+        draftKey(requestId),
+        JSON.stringify({ ts: Date.now(), data: currentFormData })
+      );
+      console.log('💾 Saving role selections before navigation (local draft):', {
+        key: draftKey(requestId),
+        currentFormData,
+      });
+      const sk = stableStorageKey();
+      if (sk) {
+        localStorage.setItem(sk, JSON.stringify(currentFormData));
+        console.log('💾 Saving role selections (stable key):', { key: sk, currentFormData });
+      }
+    } else {
+      console.log('🚫 Not saving role selections (no requestId)');
+    }
+  };
+
+  // --- mount flow -----------------------------------------------------------
+  
+  // On mount: prefer URL param for a stable ID; load DB first, then overlay local draft.
+  useEffect(() => {
+    (async () => {
+      const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
+
+      if (isCopyFlow) {
+        const pendingFormData = localStorage.getItem('pendingFormData');
+        const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+        const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+
+        if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
+          setIsEditingCopiedRoles(true);
+          try {
+            const formData: CopyFlowForm = JSON.parse(pendingFormData);
+            const roleData = JSON.parse(copiedRoleSelections);
+            setRequestDetails({ 
+              employee_name: formData.employeeName, 
+              agency_name: formData.agencyName, 
+              agency_code: formData.agencyCode 
+            });
+            
+            // Map copied role data to form fields
+            if (roleData) {
+              Object.entries(roleData).forEach(([key, value]) => {
+                if (typeof value === 'boolean' && value === true) {
+                  setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+                } else if (typeof value === 'string' && value.trim()) {
+                  setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+                }
+              });
+            }
+            
+            // Mark hydration as complete
+            setTimeout(() => {
+              isHydratingRef.current = false;
+            }, 0);
+            return;
+          } catch (e) {
+            console.error('Error loading copy-flow data:', e);
+            toast.error('Error loading copied user data');
+          }
+        } else {
+          localStorage.removeItem('editingCopiedRoles');
+          toast.error('Copy flow data is incomplete. Please try again.');
+          navigate('/');
+          return;
+        }
+      }
+
+      const stateRequestId = (location as any)?.state?.requestId;
+      const effectiveId = stateRequestId || (idParam as string | null);
+
+      if (!effectiveId) {
+        toast.error('Please complete the main form first before selecting roles.');
+        navigate('/');
+        return;
+      }
+
+      setRequestId(effectiveId);
+
+      // 1) Load header details and capture them immediately
+      const details = await fetchRequestDetails(effectiveId);
+
+      // 2) Try restoring from a stable, person+agency local draft USING those details
+      const restoredStable = restoreFromStableDraftFor(details);
+
+      // 3) If nothing to restore locally, hydrate from DB
+      if (!restoredStable) {
+        await fetchExistingSelections(effectiveId);
+      }
+
+      // 4) Always overlay any legacy id-scoped local draft for backwards compatibility
+      restoreFromLocalDraft(effectiveId);
+
+      // 5) Sync RHF defaults to the UI and open autosave gate
+      setTimeout(() => {
+        const snap = getValues();
+        reset(snap);
+        isHydratingRef.current = false; // 👈 now autosave may run
+        console.log('🔁 Final sync after all hydration layers; autosave enabled:', snap);
+      }, 0);
+    })();
+  }, [location.state, idParam, navigate, reset, setValue, getValues, clearErrors]);
+
+  // Submit
+  const onSubmit = async (data: SecurityRoleSelection) => {
+    // Require at least one BU
+    const homeVal: any = (data as any).homeBusinessUnit;
+    if (!homeVal || (Array.isArray(homeVal) && homeVal.length === 0)) {
+      setError('homeBusinessUnit' as any, {
+        type: 'manual',
+        message: 'Home Business Unit is required. Please select at least one business unit.',
+      });
+      toast.error('Please select at least one Home Business Unit.');
+      homeBusinessUnitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // Require at least one role selected
+    const anyRole = Object.entries((data as any) || {}).some(
+      ([, value]) => typeof value === 'boolean' && value === true
+    );
+    if (!anyRole) {
+      toast.error('Please select at least one role.');
       return;
     }
 
     setSaving(true);
-    
+
     try {
       if (isEditingCopiedRoles) {
-        console.log('🔧 Copy flow - processing submission');
-        
         const pendingFormData = localStorage.getItem('pendingFormData');
-        const roleData = JSON.parse(localStorage.getItem('copiedRoleSelections') || '{}');
-        
-        if (!pendingFormData) {
-          throw new Error('No pending form data found');
-        }
-
-        console.log('🔧 Copy flow - pendingFormData:', JSON.parse(pendingFormData));
-        console.log('🔧 Copy flow - roleData:', roleData);
+        if (!pendingFormData) throw new Error('No pending form data found');
 
         const d: CopyFlowForm = JSON.parse(pendingFormData);
         const pocUser = localStorage.getItem('pocUserName');
 
-        // Create the complete request payload
-        const requiredFields = {
-          start_date: d.startDate,
-          employee_name: d.employeeName,
-          employee_id: d.employeeId || null,
-          is_non_employee: !!d.isNonEmployee,
-          work_location: d.workLocation || null,
-          work_phone: d.workPhone ? d.workPhone.replace(/\D/g, '') : null,
-          email: d.email,
-          agency_name: d.agencyName,
-          agency_code: d.agencyCode,
-          justification: d.justification || null,
-          submitter_name: d.submitterName,
-          submitter_email: d.submitterEmail,
-          supervisor_name: d.supervisorName,
-          supervisor_email: d.supervisorUsername,
-          security_admin_name: d.securityAdminName,
-          security_admin_email: d.securityAdminUsername,
-          status: 'pending',
-          poc_user: pocUser,
-        };
-
-        console.log('🔧 Copy flow - creating request with data:', requiredFields);
-
-        // Create the new request
-        const { data: newReq, error: requestError } = await supabase
+        // Ensure start_date is properly set - this is critical for the database constraint
+        const startDate = d.startDate || new Date().toISOString().split('T')[0];
+        
+        console.log('🔧 Copy flow - pendingFormData:', d);
+        console.log('🔧 Copy flow - roleData:', roleData);
+           
+        console.log('🔧 Copy flow - creating request with data:', {
+          startDate,
+          employeeName: d.employeeName,
+          submitterName: requiredFields.submitter_name,
+          submitterEmail: requiredFields.submitter_email,
+          email: requiredFields.email,
+          hasStartDate: !!startDate
+        });
+        const requestPayload = requiredFields;
+        const { data: newRequest, error: requestError } = await supabase
           .from('security_role_requests')
-          .insert(requiredFields)
+          .insert(requestPayload)
           .select()
           .single();
 
         if (requestError) throw requestError;
 
-        // Create security area
-        const { error: areasError } = await supabase.from('security_areas').insert({
-          request_id: newReq.id,
-          area_type: 'accounting_procurement',
-          director_name: d.accountingDirector || null,
-          director_email: d.accountingDirectorUsername || null,
-        });
+        const { error: areasError } = await supabase
+          .from('security_areas')
+          .insert({
+            request_id: newRequest.id,
+            area_type: 'accounting_procurement',
+            director_name: d.accountingDirector || null,
+            director_email: d.accountingDirectorUsername || null,
+          });
 
         if (areasError) throw areasError;
 
-        // Create role selections
-        const selections = buildSelections(newReq.id, d.agencyCode, form);
+        const rawPayload = buildRoleSelectionData(newRequest.id, data, {
+          homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
+        });
+
+        const cleaned = coerceBooleansDeep(rawPayload);
+        const normalized = normalizeRoleFlagsTrueOnly(cleaned);
+
         const { error: selectionsError } = await supabase
           .from('security_role_selections')
-          .insert(selections);
+          .insert(normalized);
 
         if (selectionsError) throw selectionsError;
 
-        // Clean up copy flow data
-        clearCopyFlowData();
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('editingCopiedRoles');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
 
         toast.success('Role selections saved successfully!');
-        navigate('/success', { state: { requestId: newReq.id } });
+        navigate('/success', { state: { requestId: newRequest.id } });
       } else {
-        // Normal flow - update existing request
         if (!requestId) {
           toast.error('No request found. Please start from the main form.');
           navigate('/');
           return;
         }
 
-        const selections = buildSelections(requestId, requestDetails?.agency_code, form);
+        // Build payload with arrays parsed for TEXT[] columns
+        const rawPayload = buildRoleSelectionData(requestId, data, {
+          homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
+        });
+
+        // Coerce any sneaky "on"/["on","on"] values → booleans
+        const cleaned = coerceBooleansDeep(rawPayload);
+        const normalized = normalizeRoleFlagsTrueOnly(cleaned);
+
         const { error } = await supabase
           .from('security_role_selections')
-          .upsert(selections, { onConflict: 'request_id' });
+          .upsert(normalized, { onConflict: 'request_id' });
 
         if (error) throw error;
 
-        // Save to localStorage for future visits
-        if (requestDetails) {
-          const storageKey = `selectRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
-          localStorage.setItem(storageKey, JSON.stringify(form));
-          console.log('💾 Saving Select Roles form data for future visits:', { storageKey, form });
-        }
+        // ✅ Clear local draft on successful save
+        try {
+          localStorage.removeItem(draftKey(requestId));
+        } catch {}
 
         toast.success('Role selections saved successfully!');
         navigate('/success', { state: { requestId } });
       }
-    } catch (err: any) {
-      console.error('Error saving role selections:', err);
-      toast.error('Failed to save role selections. Please try again.');
+    } catch (error: any) {
+      console.error('Error saving role selections:', error);
+      const errorMessage = error?.message || 'Unknown error occurred';
+
+      if (
+        error instanceof Error &&
+        error.message.includes('home_business_unit') &&
+        (error.message.includes('not-null') || error.message.includes('null value'))
+      ) {
+        setError('homeBusinessUnit' as any, {
+          type: 'manual',
+          message: 'Home Business Unit is required. Please select at least one business unit.',
+        });
+      } else {
+        toast.error(`Failed to save role selections: ${errorMessage}`);
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  // Build selections payload for database
-  function buildSelections(
-    requestId: string,
-    agencyCode: string | undefined,
-    form: SecurityRoleSelection
-  ) {
-    const homeBU = Array.isArray(form.homeBusinessUnit) 
-      ? form.homeBusinessUnit 
-      : form.homeBusinessUnit 
-        ? [form.homeBusinessUnit] 
-        : [(agencyCode?.padEnd(5, '0') || '00000').substring(0, 5)];
-
-    return {
-      request_id: requestId,
-      home_business_unit: homeBU,
-      other_business_units: form.otherBusinessUnits?.length ? form.otherBusinessUnits : null,
-      
-      // Accounts Payable
-      voucher_entry: form.voucherEntry,
-      voucher_approver_1: form.voucherApprover1?.length ? form.voucherApprover1 : null,
-      voucher_approver_2: form.voucherApprover2?.length ? form.voucherApprover2 : null,
-      voucher_approver_3: form.voucherApprover3?.length ? form.voucherApprover3 : null,
-      maintenance_voucher_build_errors: form.maintenanceVoucherBuildErrors,
-      match_override: form.matchOverride,
-      ap_inquiry_only: form.apInquiryOnly,
-      ap_workflow_approver: form.apWorkflowApprover,
-      ap_workflow_route_controls: form.apWorkflowRouteControls?.length ? form.apWorkflowRouteControls : null,
-      
-      // New AP fields
-      ap_voucher_approver_1: form.apVoucherApprover1,
-      ap_voucher_approver_2: form.apVoucherApprover2,
-      ap_voucher_approver_3: form.apVoucherApprover3,
-      ap_voucher_approver_1_route_controls: form.apVoucherApprover1RouteControls?.length ? form.apVoucherApprover1RouteControls : null,
-      ap_voucher_approver_2_route_controls: form.apVoucherApprover2RouteControls?.length ? form.apVoucherApprover2RouteControls : null,
-      ap_voucher_approver_3_route_controls: form.apVoucherApprover3RouteControls?.length ? form.apVoucherApprover3RouteControls : null,
-
-      // Accounts Receivable
-      cash_maintenance: form.cashMaintenance,
-      receivable_specialist: form.receivableSpecialist,
-      receivable_supervisor: form.receivableSupervisor,
-      writeoff_approval_business_units: form.writeoffApprovalBusinessUnits?.length ? form.writeoffApprovalBusinessUnits : null,
-      billing_create: form.billingCreate,
-      billing_specialist: form.billingSpecialist,
-      billing_supervisor: form.billingSupervisor,
-      credit_invoice_approval_business_units: form.creditInvoiceApprovalBusinessUnits?.length ? form.creditInvoiceApprovalBusinessUnits : null,
-      customer_maintenance_specialist: form.customerMaintenanceSpecialist,
-      ar_billing_setup: form.arBillingSetup,
-      ar_billing_inquiry_only: form.arBillingInquiryOnly,
-      cash_management_inquiry_only: form.cashManagementInquiryOnly,
-
-      // Budget Control
-      budget_journal_entry_online: form.budgetJournalEntryOnline,
-      budget_journal_load: form.budgetJournalLoad,
-      journal_approver: form.journalApprover,
-      appropriation_sources: form.appropriationSources?.length ? form.appropriationSources : null,
-      expense_budget_source: form.expenseBudgetSource?.length ? form.expenseBudgetSource : null,
-      revenue_budget_source: form.revenueBudgetSource?.length ? form.revenueBudgetSource : null,
-      budget_transfer_entry_online: form.budgetTransferEntryOnline,
-      transfer_approver: form.transferApprover,
-      transfer_appropriation_sources: form.transferAppropriationSources?.length ? form.transferAppropriationSources : null,
-      budget_inquiry_only: form.budgetInquiryOnly,
-
-      // General Ledger
-      journal_entry_online: form.journalEntryOnline,
-      journal_load: form.journalLoad,
-      agency_chartfield_maintenance: form.agencyChartfieldMaintenance,
-      gl_agency_approver: form.glAgencyApprover,
-      gl_agency_approver_sources: form.glAgencyApproverSources?.length ? form.glAgencyApproverSources : null,
-      general_ledger_inquiry_only: form.generalLedgerInquiryOnly,
-      nvision_reporting_agency_user: form.nvisionReportingAgencyUser,
-      needs_daily_receipts_report: form.needsDailyReceiptsReport,
-
-      // Grants
-      award_data_entry: form.awardDataEntry,
-      grant_fiscal_manager: form.grantFiscalManager,
-      program_manager: form.programManager,
-      gm_agency_setup: form.gmAgencySetup,
-      grants_inquiry_only: form.grantsInquiryOnly,
-
-      // Project Costing
-      federal_project_initiator: form.federalProjectInitiator,
-      oim_initiator: form.oimInitiator,
-      project_initiator: form.projectInitiator,
-      project_manager: form.projectManager,
-      capital_programs_office: form.capitalProgramsOffice,
-      project_cost_accountant: form.projectCostAccountant,
-      project_fixed_asset: form.projectFixedAsset,
-      category_subcategory_manager: form.categorySubcategoryManager,
-      project_control_dates: form.projectControlDates,
-      project_accounting_systems: form.projectAccountingSystems,
-      mndot_projects_inquiry: form.mndotProjectsInquiry,
-      projects_inquiry_only: form.projectsInquiryOnly,
-      mndot_project_approver: form.mndotProjectApprover,
-      route_control: form.routeControl?.length ? form.routeControl : null,
-
-      // Cost Allocation
-      cost_allocation_inquiry_only: form.costAllocationInquiryOnly,
-
-      // Asset Management
-      financial_accountant_assets: form.financialAccountantAssets,
-      asset_management_inquiry_only: form.assetManagementInquiryOnly,
-      physical_inventory_approval_1: form.physicalInventoryApproval1,
-      physical_inventory_business_units: form.physicalInventoryBusinessUnits?.length ? form.physicalInventoryBusinessUnits : null,
-      physical_inventory_approval_2: form.physicalInventoryApproval2,
-      physical_inventory_department_ids: form.physicalInventoryDepartmentIds?.length ? form.physicalInventoryDepartmentIds : null,
-
-      // Inventory
-      inventory_express_issue: form.inventoryExpressIssue,
-      inventory_adjustment_approver: form.inventoryAdjustmentApprover,
-      inventory_replenishment_buyer: form.inventoryReplenishmentBuyer,
-      inventory_control_worker: form.inventoryControlWorker,
-      inventory_express_putaway: form.inventoryExpressPutaway,
-      inventory_fulfillment_specialist: form.inventoryFulfillmentSpecialist,
-      inventory_po_receiver: form.inventoryPoReceiver,
-      inventory_returns_receiver: form.inventoryReturnsReceiver,
-      inventory_cost_adjustment: form.inventoryCostAdjustment,
-      inventory_materials_manager: form.inventoryMaterialsManager,
-      inventory_delivery: form.inventoryDelivery,
-      inventory_inquiry_only: form.inventoryInquiryOnly,
-      inventory_configuration_agency: form.inventoryConfigurationAgency,
-      inventory_pick_plan_report_distribution: form.inventoryPickPlanReportDistribution,
-      ship_to_location: form.shipToLocation?.length ? form.shipToLocation : null,
-      inventory_business_units: form.inventoryBusinessUnits?.length ? form.inventoryBusinessUnits : null,
-
-      // Purchase Orders
-      po_approver: form.poApprover,
-      po_approver_2: form.poApprover2,
-      po_approver_3: form.poApprover3,
-      po_approver_limit_1: form.poApproverLimit1?.length ? form.poApproverLimit1 : null,
-      po_approver_limit_2: form.poApproverLimit2?.length ? form.poApproverLimit2 : null,
-      po_approver_limit_3: form.poApproverLimit3?.length ? form.poApproverLimit3 : null,
-      po_approver_route_controls: form.poApproverRouteControls?.length ? form.poApproverRouteControls : null,
-      po_data_entry: form.poDataEntry,
-      po_data_entry_origin: form.poDataEntryOrigin?.length ? form.poDataEntryOrigin : null,
-      po_data_entry_ship_to: form.poDataEntryShipTo?.length ? form.poDataEntryShipTo : null,
-      po_inquiry_only: form.poInquiryOnly,
-      po_location_code: form.poLocationCode?.length ? form.poLocationCode : null,
-      po_origin: form.poOrigin?.length ? form.poOrigin : null,
-      po_ship_to: form.poShipTo?.length ? form.poShipTo : null,
-      po_epro_buyer: form.poEproBuyer,
-      epro_fund: form.eproFund?.length ? form.eproFund : null,
-      epro_agency_cost_1: form.eproAgencyCost1?.length ? form.eproAgencyCost1 : null,
-      epro_appropriation_id: form.eproAppropriationId?.length ? form.eproAppropriationId : null,
-      epro_fin_department_id: form.eproFinDepartmentId?.length ? form.eproFinDepartmentId : null,
-
-      // Vendor Management
-      vendor_inquiry_only: form.vendorInquiryOnly,
-      vendor_maintenance: form.vendorMaintenance,
-      vendor_approval: form.vendorApproval,
-      vendor_setup: form.vendorSetup,
-
-      // Strategic Sourcing
-      ss_event_creator_buyer: form.ssEventCreatorBuyer,
-      ss_event_collaborator: form.ssEventCollaborator,
-      ss_event_approver: form.ssEventApprover,
-      ss_event_inquiry_only: form.ssEventInquiryOnly,
-      ss_tech_coord_approver: form.ssTechCoordApprover,
-      ss_tech_state_approver: form.ssTechStateApprover,
-      ss_business_units: form.ssBusinessUnits?.length ? form.ssBusinessUnits : null,
-      ss_selected_origins: form.ssSelectedOrigins?.length ? form.ssSelectedOrigins : null,
-      ss_default_origin: form.ssDefaultOrigin?.length ? form.ssDefaultOrigin : null,
-      ss_all_origins: form.ssAllOrigins,
-
-      // Contract Management
-      contract_encumbrance: form.contractEncumbrance,
-      sc_agreement_manager: form.scAgreementManager,
-      sc_doc_approver_origin: form.scDocApproverOrigin?.length ? form.scDocApproverOrigin : null,
-      sc_electronic_docs_yes: form.scElectronicDocsYes,
-      sc_electronic_docs_no: form.scElectronicDocsNo,
-      sc_other_employee_ids: form.scOtherEmployeeIds?.length ? form.scOtherEmployeeIds : null,
-
-      // P-Card
-      p_card_approver: form.pCardApprover,
-      p_card_reviewer: form.pCardReviewer,
-      p_card_reconciler: form.pCardReconciler,
-
-      // Central Goods
-      cg_catalog_owner: form.cgCatalogOwner,
-      cg_inquiry_only: form.cgInquiryOnly,
-      core_order_receiver: form.coreOrderReceiver,
-
-      // Additional fields
-      add_access_type: form.addAccessType || null,
-      agency_codes: form.agencyCodes?.length ? form.agencyCodes : null,
-      department_id: form.departmentId?.length ? form.departmentId : null,
-      prohibited_department_ids: form.prohibitedDepartmentIds?.length ? form.prohibitedDepartmentIds : null,
-      delete_access_codes: form.deleteAccessCodes?.length ? form.deleteAccessCodes : null,
-
-      // Role justification and approval
-      role_justification: form.roleJustification?.trim() || null,
-      supervisor_approval: form.supervisorApproval,
-
-      // Store the complete form data as JSON for future reference
-      role_selection_json: form,
-    };
-
-    return selections;
-  }
-
-  const handleUserChange = (user: User | null) => {
-    console.log('🔧 SelectRolesPage handleUserChange called with:', user);
-    setSelectedUser(user);
-  };
+  const ssTemplateRows = ['Business unit template', 'Department template', 'Personal template'];
+  const ssActions = ['Create', 'Update', 'Delete'];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -961,10 +972,11 @@ function SelectRolesPage() {
       />
 
       <div className="py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <div className="mb-8">
             <Link
               to="/"
+              onClick={handleBackToMainForm}
               className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-500"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
@@ -985,2319 +997,2320 @@ function SelectRolesPage() {
                   </p>
                   {requestDetails && (
                     <p className="mt-2 text-sm text-blue-600">
-                      Request for: <strong>{requestDetails.employee_name}</strong> at{' '}
-                      <strong>{requestDetails.agency_name}</strong>
+                      Request for: <strong>{requestDetails?.employee_name}</strong> at{' '}
+                      <strong>{requestDetails?.agency_name}</strong>
                     </p>
                   )}
                 </div>
               </div>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-12">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8">
               {/* Copy User Section */}
-              {!isEditingCopiedRoles && (
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-6 rounded-lg">
-                  <div className="flex items-start">
-                    <Copy className="h-6 w-6 text-blue-600 mr-3 mt-1" />
-                    <div className="flex-1">
-                      <h3 className="text-lg font-medium text-blue-800 mb-4">
-                        Copy Access from Existing User (Optional)
-                      </h3>
-                      <p className="text-sm text-blue-700 mb-4">
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <Copy className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      Copy Existing User Access (Optional)
+                    </h3>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <p>
                         You can copy role selections from an existing user who has similar job responsibilities.
-                        This will pre-populate the form with their current access permissions, which you can then modify as needed.
+                        This will pre-populate the form with their current access permissions.
                       </p>
+                    </div>
+                    <div className="mt-4">
                       <UserSelect
                         selectedUser={selectedUser}
                         onUserChange={handleUserChange}
-                        currentUser={localStorage.getItem('pocUserName')}
-                        currentRequestId={requestId}
-                        formData={{
-                          startDate: new Date().toISOString().split('T')[0],
-                          employeeName: requestDetails?.employee_name || '',
-                          agencyName: requestDetails?.agency_name || '',
-                          agencyCode: requestDetails?.agency_code || '',
-                          submitterName: localStorage.getItem('pocUserName') || '',
-                          submitterEmail: `${localStorage.getItem('pocUserName') || 'user'}@example.com`,
-                          supervisorName: 'Test Supervisor',
-                          supervisorUsername: 'supervisor@example.com',
-                          securityAdminName: 'Test Security Admin',
-                          securityAdminUsername: 'security@example.com',
-                          accountingDirector: 'Test Accounting Director',
-                          accountingDirectorUsername: 'accounting@example.com',
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Business Unit Selection */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Building className="h-5 w-5 text-blue-600 mr-2" />
-                    Business Unit Information
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Select your home business unit and any additional business units you need access to.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  <div>
-                    <MultiSelect
-                      options={businessUnitOptions}
-                      value={selectedRoles.homeBusinessUnit || ''}
-                      onChange={(values) => setValue('homeBusinessUnit', values.length === 1 ? values[0] : values)}
-                      placeholder="Select home business unit..."
-                      label="Home Business Unit"
-                      required
-                      error={errors.homeBusinessUnit?.message}
-                      searchPlaceholder="Search business units..."
-                    />
-                  </div>
-
-                  <div>
-                    <MultiSelect
-                      options={businessUnitOptions}
-                      value={selectedRoles.otherBusinessUnits || []}
-                      onChange={(values) => setValue('otherBusinessUnits', values)}
-                      placeholder="Select additional business units..."
-                      label="Other Business Units (Optional)"
-                      searchPlaceholder="Search business units..."
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Accounts Payable Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <DollarSign className="h-5 w-5 text-green-600 mr-2" />
-                    Accounts Payable
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Select roles related to voucher processing, approvals, and accounts payable management.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Basic AP Roles */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Basic Roles</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('voucherEntry')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Voucher Entry</span>
-                        <p className="text-xs text-gray-500">Create and enter vouchers into the system</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('maintenanceVoucherBuildErrors')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Maintenance Voucher Build Errors</span>
-                        <p className="text-xs text-gray-500">Resolve errors in voucher building processes</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('matchOverride')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Match Override</span>
-                        <p className="text-xs text-gray-500">Override matching discrepancies in accounts payable</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('apInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">AP Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to Accounts Payable information</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Workflow Roles */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Workflow Roles</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('apWorkflowApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">AP Workflow Approver</span>
-                        <p className="text-xs text-gray-500">Approver role within the Accounts Payable workflow</p>
-                      </div>
-                    </label>
-
-                    {selectedRoles.apWorkflowApprover && (
-                      <div className="ml-6">
-                        <MultiSelect
-                          options={[]}
-                          value={selectedRoles.apWorkflowRouteControls || []}
-                          onChange={(values) => setValue('apWorkflowRouteControls', values)}
-                          placeholder="Enter route control values..."
-                          label="AP Workflow Route Controls"
-                          allowCustom
-                          searchPlaceholder="Add route control..."
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* New AP Voucher Approvers */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Voucher Approvers</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('apVoucherApprover1')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">AP Voucher Approver 1</span>
-                        <p className="text-xs text-gray-500">First level AP voucher approver</p>
-                      </div>
-                    </label>
-
-                    {selectedRoles.apVoucherApprover1 && (
-                      <div className="ml-6">
-                        <MultiSelect
-                          options={[]}
-                          value={selectedRoles.apVoucherApprover1RouteControls || []}
-                          onChange={(values) => setValue('apVoucherApprover1RouteControls', values)}
-                          placeholder="Enter department IDs..."
-                          label="Route Controls: Financial Department ID(s)"
-                          allowCustom
-                          searchPlaceholder="Add department ID..."
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Enter 5-digit department IDs (e.g., 12345, 67890)
-                        </p>
-                      </div>
-                    )}
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('apVoucherApprover2')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">AP Voucher Approver 2</span>
-                        <p className="text-xs text-gray-500">Second level AP voucher approver</p>
-                      </div>
-                    </label>
-
-                    {selectedRoles.apVoucherApprover2 && (
-                      <div className="ml-6">
-                        <MultiSelect
-                          options={[]}
-                          value={selectedRoles.apVoucherApprover2RouteControls || []}
-                          onChange={(values) => setValue('apVoucherApprover2RouteControls', values)}
-                          placeholder="Enter department IDs..."
-                          label="Route Controls: Financial Department ID(s)"
-                          allowCustom
-                          searchPlaceholder="Add department ID..."
-                        />
-                      </div>
-                    )}
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('apVoucherApprover3')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">AP Voucher Approver 3</span>
-                        <p className="text-xs text-gray-500">Third level AP voucher approver</p>
-                      </div>
-                    </label>
-
-                    {selectedRoles.apVoucherApprover3 && (
-                      <div className="ml-6">
-                        <MultiSelect
-                          options={[]}
-                          value={selectedRoles.apVoucherApprover3RouteControls || []}
-                          onChange={(values) => setValue('apVoucherApprover3RouteControls', values)}
-                          placeholder="Enter department IDs..."
-                          label="Route Controls: Financial Department ID(s)"
-                          allowCustom
-                          searchPlaceholder="Add department ID..."
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Legacy Voucher Approvers */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Legacy Voucher Approvers (Email-based)</h4>
-                  <p className="text-sm text-gray-600">
-                    These are the original voucher approver roles that use email addresses for routing.
-                  </p>
-                  
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.voucherApprover1 || []}
-                        onChange={(values) => setValue('voucherApprover1', values)}
-                        placeholder="Enter email addresses..."
-                        label="Voucher Approver 1 (Email)"
-                        allowCustom
-                        searchPlaceholder="Add email address..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        First level approval for vouchers
-                      </p>
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.voucherApprover2 || []}
-                        onChange={(values) => setValue('voucherApprover2', values)}
-                        placeholder="Enter email addresses..."
-                        label="Voucher Approver 2 (Email)"
-                        allowCustom
-                        searchPlaceholder="Add email address..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Second level approval for vouchers
-                      </p>
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.voucherApprover3 || []}
-                        onChange={(values) => setValue('voucherApprover3', values)}
-                        placeholder="Enter email addresses..."
-                        label="Voucher Approver 3 (Email)"
-                        allowCustom
-                        searchPlaceholder="Add email address..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Third level approval for vouchers
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Accounts Receivable and Cash Management Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <TrendingUp className="h-5 w-5 text-green-600 mr-2" />
-                    Accounts Receivable and Cash Management
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage customer billing, cash receipts, and accounts receivable processes.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Cash Management */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Cash Management</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('cashMaintenance')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Cash Maintenance</span>
-                        <p className="text-xs text-gray-500">Manage cash-related transactions and records</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('cashManagementInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Cash Management Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to cash management details</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Receivables */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Receivables</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('receivableSpecialist')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Receivable Specialist</span>
-                        <p className="text-xs text-gray-500">Specialist role for managing accounts receivable</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('receivableSupervisor')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Receivable Supervisor</span>
-                        <p className="text-xs text-gray-500">Supervisory role for accounts receivable operations</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('customerMaintenanceSpecialist')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Customer Maintenance Specialist</span>
-                        <p className="text-xs text-gray-500">Manage customer records and data</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Billing */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Billing</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('billingCreate')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Billing Create</span>
-                        <p className="text-xs text-gray-500">Create new billing entries</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('billingSpecialist')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Billing Specialist</span>
-                        <p className="text-xs text-gray-500">Specialist role for billing processes</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('billingSupervisor')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Billing Supervisor</span>
-                        <p className="text-xs text-gray-500">Supervisory role for billing operations</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('arBillingSetup')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">AR Billing Setup</span>
-                        <p className="text-xs text-gray-500">Configure Accounts Receivable billing settings</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('arBillingInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">AR Billing Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to AR billing information</p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Business Unit Specific Controls */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Business Unit Specific Controls</h4>
-                  
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div>
-                      <MultiSelect
-                        options={businessUnitOptions}
-                        value={selectedRoles.writeoffApprovalBusinessUnits || []}
-                        onChange={(values) => setValue('writeoffApprovalBusinessUnits', values)}
-                        placeholder="Select business units for write-off approval..."
-                        label="Write-off Approval Business Units"
-                        searchPlaceholder="Search business units..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Business units where you can approve write-offs
-                      </p>
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={businessUnitOptions}
-                        value={selectedRoles.creditInvoiceApprovalBusinessUnits || []}
-                        onChange={(values) => setValue('creditInvoiceApprovalBusinessUnits', values)}
-                        placeholder="Select business units for credit invoice approval..."
-                        label="Credit Invoice Approval Business Units"
-                        searchPlaceholder="Search business units..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Business units where you can approve credit invoices
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Budgets/Commitment Control & Appropriation Maintenance Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <FileText className="h-5 w-5 text-purple-600 mr-2" />
-                    Budgets/Commitment Control & Appropriation Maintenance
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage budget journals, transfers, and appropriation maintenance.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Journal Entry */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Journal Entry</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('budgetJournalEntryOnline')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Budget Journal Entry Online</span>
-                        <p className="text-xs text-gray-500">Online entry of budget journals</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('budgetJournalLoad')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Budget Journal Load</span>
-                        <p className="text-xs text-gray-500">Load budget journals into the system</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('journalApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Journal Approver</span>
-                        <p className="text-xs text-gray-500">Approve budget journals</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Budget Sources */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Budget Sources</h4>
-                    
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.appropriationSources || []}
-                        onChange={(values) => setValue('appropriationSources', values)}
-                        placeholder="Enter appropriation sources..."
-                        label="Appropriation Sources"
-                        allowCustom
-                        searchPlaceholder="Add appropriation source..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.expenseBudgetSource || []}
-                        onChange={(values) => setValue('expenseBudgetSource', values)}
-                        placeholder="Enter expense budget sources..."
-                        label="Expense Budget Source"
-                        allowCustom
-                        searchPlaceholder="Add expense source..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.revenueBudgetSource || []}
-                        onChange={(values) => setValue('revenueBudgetSource', values)}
-                        placeholder="Enter revenue budget sources..."
-                        label="Revenue Budget Source"
-                        allowCustom
-                        searchPlaceholder="Add revenue source..."
-                      />
-                    </div>
-                  </div>
-
-                  {/* Transfers */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Budget Transfers</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('budgetTransferEntryOnline')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Budget Transfer Entry Online</span>
-                        <p className="text-xs text-gray-500">Online entry of budget transfers</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('transferApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Transfer Approver</span>
-                        <p className="text-xs text-gray-500">Approve budget transfers</p>
-                      </div>
-                    </label>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.transferAppropriationSources || []}
-                        onChange={(values) => setValue('transferAppropriationSources', values)}
-                        placeholder="Enter transfer appropriation sources..."
-                        label="Transfer Appropriation Sources"
-                        allowCustom
-                        searchPlaceholder="Add appropriation source..."
-                      />
-                    </div>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('budgetInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Budget Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to budget information</p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* General Ledger and NVISION Reporting Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Database className="h-5 w-5 text-indigo-600 mr-2" />
-                    General Ledger and NVISION Reporting
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage general ledger entries, chartfield maintenance, and reporting access.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Journal Management */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Journal Management</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('journalEntryOnline')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Journal Entry Online</span>
-                        <p className="text-xs text-gray-500">Online entry of general ledger journals</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('journalLoad')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Journal Load</span>
-                        <p className="text-xs text-gray-500">Load general ledger journals into the system</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('agencyChartfieldMaintenance')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Agency Chartfield Maintenance</span>
-                        <p className="text-xs text-gray-500">Maintain chartfield data for agencies</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Approvals */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Approvals</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('glAgencyApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">GL Agency Approver</span>
-                        <p className="text-xs text-gray-500">Approve general ledger entries for agencies</p>
-                      </div>
-                    </label>
-
-                    {selectedRoles.glAgencyApprover && (
-                      <div className="ml-6">
-                        <MultiSelect
-                          options={[]}
-                          value={selectedRoles.glAgencyApproverSources || []}
-                          onChange={(values) => setValue('glAgencyApproverSources', values)}
-                          placeholder="Enter GL agency approver sources..."
-                          label="GL Agency Approver Sources"
-                          allowCustom
-                          searchPlaceholder="Add source..."
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Reporting */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Reporting</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('generalLedgerInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">General Ledger Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to General Ledger information</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('nvisionReportingAgencyUser')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">NVISION Reporting Agency User</span>
-                        <p className="text-xs text-gray-500">User role for NVISION reporting within an agency</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('needsDailyReceiptsReport')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Needs Daily Receipts Report</span>
-                        <p className="text-xs text-gray-500">Access to daily receipts reports</p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Grants Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <FileText className="h-5 w-5 text-orange-600 mr-2" />
-                    Grants
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage grant awards, fiscal responsibilities, and program administration.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('awardDataEntry')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Award Data Entry</span>
-                      <p className="text-xs text-gray-500">Enter award-related data for grants</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('grantFiscalManager')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Grant Fiscal Manager</span>
-                      <p className="text-xs text-gray-500">Manage financial aspects of grants</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('programManager')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Program Manager</span>
-                      <p className="text-xs text-gray-500">Manage grant programs</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('gmAgencySetup')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">GM Agency Setup</span>
-                      <p className="text-xs text-gray-500">Configure agency-specific settings for grants management</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('grantsInquiryOnly')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Grants Inquiry Only</span>
-                      <p className="text-xs text-gray-500">View-only access to grants information</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Project Costing Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Clipboard className="h-5 w-5 text-red-600 mr-2" />
-                    Project Costing
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage project initiation, costing, and financial tracking.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Project Initiation */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Project Initiation</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('federalProjectInitiator')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Federal Project Initiator</span>
-                        <p className="text-xs text-gray-500">Initiate federal projects</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('oimInitiator')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">OIM Initiator</span>
-                        <p className="text-xs text-gray-500">Initiate OIM (Other Information Management) projects</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('projectInitiator')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Project Initiator</span>
-                        <p className="text-xs text-gray-500">Initiate new projects</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('projectManager')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Project Manager</span>
-                        <p className="text-xs text-gray-500">Manage project lifecycle and resources</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Project Administration */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Project Administration</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('capitalProgramsOffice')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Capital Programs Office</span>
-                        <p className="text-xs text-gray-500">Access related to capital programs office functions</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('projectCostAccountant')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Project Cost Accountant</span>
-                        <p className="text-xs text-gray-500">Manage project costs and accounting</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('projectFixedAsset')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Project Fixed Asset</span>
-                        <p className="text-xs text-gray-500">Manage fixed assets related to projects</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('categorySubcategoryManager')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Category Subcategory Manager</span>
-                        <p className="text-xs text-gray-500">Manage project categories and subcategories</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Project Controls */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Project Controls</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('projectControlDates')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Project Control Dates</span>
-                        <p className="text-xs text-gray-500">Manage control dates for projects</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('projectAccountingSystems')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Project Accounting Systems</span>
-                        <p className="text-xs text-gray-500">Access to project accounting systems</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('mndotProjectsInquiry')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">MNDOT Projects Inquiry</span>
-                        <p className="text-xs text-gray-500">View-only access to MNDOT projects</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('projectsInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Projects Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to general project information</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('mndotProjectApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">MNDOT Project Approver</span>
-                        <p className="text-xs text-gray-500">Approve MNDOT projects</p>
-                      </div>
-                    </label>
-
-                    {(selectedRoles.mndotProjectApprover || selectedRoles.projectManager) && (
-                      <div>
-                        <MultiSelect
-                          options={[]}
-                          value={selectedRoles.routeControl || []}
-                          onChange={(values) => setValue('routeControl', values)}
-                          placeholder="Enter route control values..."
-                          label="Route Control"
-                          allowCustom
-                          searchPlaceholder="Add route control..."
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Manage routing controls for project processes
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Cost Allocation Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <TrendingUp className="h-5 w-5 text-yellow-600 mr-2" />
-                    Cost Allocation
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Access to cost allocation information and processes.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('costAllocationInquiryOnly')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Cost Allocation Inquiry Only</span>
-                      <p className="text-xs text-gray-500">View-only access to cost allocation information</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Asset Management Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Shield className="h-5 w-5 text-gray-600 mr-2" />
-                    Asset Management
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage fixed assets, physical inventory, and asset accounting.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Asset Accounting */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Asset Accounting</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('financialAccountantAssets')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Financial Accountant Assets</span>
-                        <p className="text-xs text-gray-500">Manage financial accounting for assets</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('assetManagementInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Asset Management Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to asset management information</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Physical Inventory */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Physical Inventory</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('physicalInventoryApproval1')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Physical Inventory Approval 1</span>
-                        <p className="text-xs text-gray-500">First level approval for physical inventory</p>
-                      </div>
-                    </label>
-
-                    {selectedRoles.physicalInventoryApproval1 && (
-                      <div className="ml-6">
-                        <MultiSelect
-                          options={businessUnitOptions}
-                          value={selectedRoles.physicalInventoryBusinessUnits || []}
-                          onChange={(values) => setValue('physicalInventoryBusinessUnits', values)}
-                          placeholder="Select business units..."
-                          label="Physical Inventory Business Units"
-                          searchPlaceholder="Search business units..."
-                        />
-                      </div>
-                    )}
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('physicalInventoryApproval2')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Physical Inventory Approval 2</span>
-                        <p className="text-xs text-gray-500">Second level approval for physical inventory</p>
-                      </div>
-                    </label>
-
-                    {selectedRoles.physicalInventoryApproval2 && (
-                      <div className="ml-6">
-                        <MultiSelect
-                          options={[]}
-                          value={selectedRoles.physicalInventoryDepartmentIds || []}
-                          onChange={(values) => setValue('physicalInventoryDepartmentIds', values)}
-                          placeholder="Enter department IDs..."
-                          label="Physical Inventory Department IDs"
-                          allowCustom
-                          searchPlaceholder="Add department ID..."
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Inventory (IN) Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Package className="h-5 w-5 text-blue-600 mr-2" />
-                    Inventory (IN)
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage inventory operations, receiving, and distribution.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                  {/* Inventory Operations */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Operations</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryExpressIssue')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Express Issue</span>
-                        <p className="text-xs text-gray-500">Quick inventory issue processing</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryExpressPutaway')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Express Putaway</span>
-                        <p className="text-xs text-gray-500">Quick inventory putaway processing</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryDelivery')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Delivery</span>
-                        <p className="text-xs text-gray-500">Manage inventory delivery operations</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to inventory information</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Inventory Management */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Management</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryAdjustmentApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Adjustment Approver</span>
-                        <p className="text-xs text-gray-500">Approve inventory adjustments</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryReplenishmentBuyer')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Replenishment Buyer</span>
-                        <p className="text-xs text-gray-500">Manage inventory replenishment purchasing</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryControlWorker')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Control Worker</span>
-                        <p className="text-xs text-gray-500">Inventory control and management tasks</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryMaterialsManager')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Materials Manager</span>
-                        <p className="text-xs text-gray-500">Manage inventory materials and supplies</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Inventory Receiving */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Receiving</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryFulfillmentSpecialist')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Fulfillment Specialist</span>
-                        <p className="text-xs text-gray-500">Manage inventory fulfillment processes</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryPoReceiver')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">PO Receiver</span>
-                        <p className="text-xs text-gray-500">Receive purchase order deliveries</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryReturnsReceiver')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Returns Receiver</span>
-                        <p className="text-xs text-gray-500">Process inventory returns</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryCostAdjustment')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Cost Adjustment</span>
-                        <p className="text-xs text-gray-500">Adjust inventory costs</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Configuration */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Configuration</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryConfigurationAgency')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Configuration Agency</span>
-                        <p className="text-xs text-gray-500">Configure agency-specific inventory settings</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('inventoryPickPlanReportDistribution')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Pick Plan Report Distribution</span>
-                        <p className="text-xs text-gray-500">Distribute pick plan reports</p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Inventory Location Controls */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Location Controls</h4>
-                  
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.shipToLocation || []}
-                        onChange={(values) => setValue('shipToLocation', values)}
-                        placeholder="Enter ship-to locations..."
-                        label="Ship To Location"
-                        allowCustom
-                        searchPlaceholder="Add location..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Locations where inventory can be shipped
-                      </p>
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={businessUnitOptions}
-                        value={selectedRoles.inventoryBusinessUnits || []}
-                        onChange={(values) => setValue('inventoryBusinessUnits', values)}
-                        placeholder="Select inventory business units..."
-                        label="Inventory Business Units"
-                        searchPlaceholder="Search business units..."
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Business units for inventory access
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Purchase Orders (PO) Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <ShoppingCart className="h-5 w-5 text-green-600 mr-2" />
-                    Purchase Orders (PO)
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage purchase order creation, approval, and processing.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* PO Approvers */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">PO Approvers</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('poApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">PO Approver</span>
-                        <p className="text-xs text-gray-500">Approve purchase orders</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('poApprover2')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">PO Approver 2</span>
-                        <p className="text-xs text-gray-500">Second level purchase order approver</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('poApprover3')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">PO Approver 3</span>
-                        <p className="text-xs text-gray-500">Third level purchase order approver</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('poInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">PO Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to purchase orders</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* PO Data Entry */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Data Entry</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('poDataEntry')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">PO Data Entry</span>
-                        <p className="text-xs text-gray-500">Create and modify purchase orders</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('poEproBuyer')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">ePro Buyer</span>
-                        <p className="text-xs text-gray-500">Electronic procurement buyer access</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* PO Controls */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Controls</h4>
-                    
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.poApproverRouteControls || []}
-                        onChange={(values) => setValue('poApproverRouteControls', values)}
-                        placeholder="Enter route controls..."
-                        label="PO Approver Route Controls"
-                        allowCustom
-                        searchPlaceholder="Add route control..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.poLocationCode || []}
-                        onChange={(values) => setValue('poLocationCode', values)}
-                        placeholder="Enter location codes..."
-                        label="PO Location Code"
-                        allowCustom
-                        searchPlaceholder="Add location code..."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* PO Limits and Origins */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Approval Limits and Origins</h4>
-                  
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.poApproverLimit1 || []}
-                        onChange={(values) => setValue('poApproverLimit1', values)}
-                        placeholder="Enter approval limits..."
-                        label="PO Approver Limit 1"
-                        allowCustom
-                        searchPlaceholder="Add limit..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.poApproverLimit2 || []}
-                        onChange={(values) => setValue('poApproverLimit2', values)}
-                        placeholder="Enter approval limits..."
-                        label="PO Approver Limit 2"
-                        allowCustom
-                        searchPlaceholder="Add limit..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.poApproverLimit3 || []}
-                        onChange={(values) => setValue('poApproverLimit3', values)}
-                        placeholder="Enter approval limits..."
-                        label="PO Approver Limit 3"
-                        allowCustom
-                        searchPlaceholder="Add limit..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.poDataEntryOrigin || []}
-                        onChange={(values) => setValue('poDataEntryOrigin', values)}
-                        placeholder="Enter data entry origins..."
-                        label="PO Data Entry Origin"
-                        allowCustom
-                        searchPlaceholder="Add origin..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.poDataEntryShipTo || []}
-                        onChange={(values) => setValue('poDataEntryShipTo', values)}
-                        placeholder="Enter ship-to locations..."
-                        label="PO Data Entry Ship To"
-                        allowCustom
-                        searchPlaceholder="Add ship-to location..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.poOrigin || []}
-                        onChange={(values) => setValue('poOrigin', values)}
-                        placeholder="Enter PO origins..."
-                        label="PO Origin"
-                        allowCustom
-                        searchPlaceholder="Add origin..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.poShipTo || []}
-                        onChange={(values) => setValue('poShipTo', values)}
-                        placeholder="Enter ship-to locations..."
-                        label="PO Ship To"
-                        allowCustom
-                        searchPlaceholder="Add ship-to location..."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* ePro Fields */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Electronic Procurement (ePro)</h4>
-                  
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.eproFund || []}
-                        onChange={(values) => setValue('eproFund', values)}
-                        placeholder="Enter ePro fund codes..."
-                        label="ePro Fund"
-                        allowCustom
-                        searchPlaceholder="Add fund code..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.eproAgencyCost1 || []}
-                        onChange={(values) => setValue('eproAgencyCost1', values)}
-                        placeholder="Enter agency cost centers..."
-                        label="ePro Agency Cost 1"
-                        allowCustom
-                        searchPlaceholder="Add cost center..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.eproAppropriationId || []}
-                        onChange={(values) => setValue('eproAppropriationId', values)}
-                        placeholder="Enter appropriation IDs..."
-                        label="ePro Appropriation ID"
-                        allowCustom
-                        searchPlaceholder="Add appropriation ID..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.eproFinDepartmentId || []}
-                        onChange={(values) => setValue('eproFinDepartmentId', values)}
-                        placeholder="Enter financial department IDs..."
-                        label="ePro Financial Department ID"
-                        allowCustom
-                        searchPlaceholder="Add department ID..."
+                        formData={watch()}
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Vendor Management Section */}
+              {/* Business Unit Information */}
               <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Users className="h-5 w-5 text-teal-600 mr-2" />
-                    Vendor Management
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage vendor information, setup, and approval processes.
-                  </p>
-                </div>
+                <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
+                  Business Unit Information
+                </h3>
 
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('vendorInquiryOnly')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Vendor Inquiry Only</span>
-                      <p className="text-xs text-gray-500">View-only access to vendor information</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('vendorMaintenance')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Vendor Maintenance</span>
-                      <p className="text-xs text-gray-500">Maintain vendor records and information</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('vendorApproval')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Vendor Approval</span>
-                      <p className="text-xs text-gray-500">Approve new vendors and vendor changes</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('vendorSetup')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Vendor Setup</span>
-                      <p className="text-xs text-gray-500">Set up new vendor accounts</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Strategic Sourcing (SS) Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Settings className="h-5 w-5 text-purple-600 mr-2" />
-                    Strategic Sourcing (SS)
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage strategic sourcing events, collaboration, and approvals.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Event Management */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Event Management</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('ssEventCreatorBuyer')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Event Creator/Buyer</span>
-                        <p className="text-xs text-gray-500">Create and manage sourcing events</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('ssEventCollaborator')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Event Collaborator</span>
-                        <p className="text-xs text-gray-500">Collaborate on sourcing events</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('ssEventApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Event Approver</span>
-                        <p className="text-xs text-gray-500">Approve sourcing events</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('ssEventInquiryOnly')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Event Inquiry Only</span>
-                        <p className="text-xs text-gray-500">View-only access to sourcing events</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Technical Coordination */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Technical Coordination</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('ssTechCoordApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Tech Coord Approver</span>
-                        <p className="text-xs text-gray-500">Technical coordination approver</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('ssTechStateApprover')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Tech State Approver</span>
-                        <p className="text-xs text-gray-500">State-level technical approver</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('ssAllOrigins')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">All Origins</span>
-                        <p className="text-xs text-gray-500">Access to all origin locations</p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Strategic Sourcing Controls */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Strategic Sourcing Controls</h4>
-                  
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    <div>
-                      <MultiSelect
-                        options={businessUnitOptions}
-                        value={selectedRoles.ssBusinessUnits || []}
-                        onChange={(values) => setValue('ssBusinessUnits', values)}
-                        placeholder="Select business units..."
-                        label="SS Business Units"
-                        searchPlaceholder="Search business units..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.ssSelectedOrigins || []}
-                        onChange={(values) => setValue('ssSelectedOrigins', values)}
-                        placeholder="Enter selected origins..."
-                        label="SS Selected Origins"
-                        allowCustom
-                        searchPlaceholder="Add origin..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.ssDefaultOrigin || []}
-                        onChange={(values) => setValue('ssDefaultOrigin', values)}
-                        placeholder="Enter default origin..."
-                        label="SS Default Origin"
-                        allowCustom
-                        searchPlaceholder="Add default origin..."
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Contract Management Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <FileText className="h-5 w-5 text-indigo-600 mr-2" />
-                    Contract Management
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage contracts, agreements, and encumbrances.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Contract Roles */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Contract Roles</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('contractEncumbrance')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Contract Encumbrance</span>
-                        <p className="text-xs text-gray-500">Manage contract encumbrances</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('scAgreementManager')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">SC Agreement Manager</span>
-                        <p className="text-xs text-gray-500">Manage service contracts and agreements</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Document Management */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Document Management</h4>
-                    
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('scElectronicDocsYes')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">SC Electronic Docs - Yes</span>
-                        <p className="text-xs text-gray-500">Access to electronic documents</p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3">
-                      <input
-                        type="checkbox"
-                        {...register('scElectronicDocsNo')}
-                        className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">SC Electronic Docs - No</span>
-                        <p className="text-xs text-gray-500">No access to electronic documents</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Contract Controls */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium text-gray-900">Contract Controls</h4>
-                    
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.scDocApproverOrigin || []}
-                        onChange={(values) => setValue('scDocApproverOrigin', values)}
-                        placeholder="Enter document approver origins..."
-                        label="SC Doc Approver Origin"
-                        allowCustom
-                        searchPlaceholder="Add origin..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.scOtherEmployeeIds || []}
-                        onChange={(values) => setValue('scOtherEmployeeIds', values)}
-                        placeholder="Enter employee IDs..."
-                        label="SC Other Employee IDs"
-                        allowCustom
-                        searchPlaceholder="Add employee ID..."
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Procurement Cards (P-Card) Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <DollarSign className="h-5 w-5 text-green-600 mr-2" />
-                    Procurement Cards (P-Card)
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage procurement card approvals, reviews, and reconciliation.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('pCardApprover')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">P-Card Approver</span>
-                      <p className="text-xs text-gray-500">Approve procurement card transactions</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('pCardReviewer')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">P-Card Reviewer</span>
-                      <p className="text-xs text-gray-500">Review procurement card transactions</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('pCardReconciler')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">P-Card Reconciler</span>
-                      <p className="text-xs text-gray-500">Reconcile procurement card statements</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Central Goods (CG) Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Package className="h-5 w-5 text-orange-600 mr-2" />
-                    Central Goods (CG)
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Manage central goods catalog and order processing.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('cgCatalogOwner')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">CG Catalog Owner</span>
-                      <p className="text-xs text-gray-500">Own and manage catalog items</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('cgInquiryOnly')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">CG Inquiry Only</span>
-                      <p className="text-xs text-gray-500">View-only access to central goods</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('coreOrderReceiver')}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Core Order Receiver</span>
-                      <p className="text-xs text-gray-500">Receive core orders from central goods</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Additional Access Controls Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Settings className="h-5 w-5 text-gray-600 mr-2" />
-                    Additional Access Controls
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Configure additional access parameters and restrictions.
-                  </p>
-                </div>
-
-                <div className="space-y-6">
-                  {/* Access Type */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Add Access Type
-                    </label>
-                    <select
-                      {...register('addAccessType')}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    >
-                      <option value="">Select access type...</option>
-                      <option value="agency">Agency</option>
-                      <option value="department">Department</option>
-                      <option value="statewide">Statewide</option>
-                    </select>
-                  </div>
-
-                  {/* Access Controls */}
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.agencyCodes || []}
-                        onChange={(values) => setValue('agencyCodes', values)}
-                        placeholder="Enter agency codes..."
-                        label="Agency Codes"
-                        allowCustom
-                        searchPlaceholder="Add agency code..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.departmentId || []}
-                        onChange={(values) => setValue('departmentId', values)}
-                        placeholder="Enter department IDs..."
-                        label="Department ID"
-                        allowCustom
-                        searchPlaceholder="Add department ID..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.prohibitedDepartmentIds || []}
-                        onChange={(values) => setValue('prohibitedDepartmentIds', values)}
-                        placeholder="Enter prohibited department IDs..."
-                        label="Prohibited Department IDs"
-                        allowCustom
-                        searchPlaceholder="Add prohibited ID..."
-                      />
-                    </div>
-
-                    <div>
-                      <MultiSelect
-                        options={[]}
-                        value={selectedRoles.deleteAccessCodes || []}
-                        onChange={(values) => setValue('deleteAccessCodes', values)}
-                        placeholder="Enter access codes to delete..."
-                        label="Delete Access Codes"
-                        allowCustom
-                        searchPlaceholder="Add access code..."
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Role Justification Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Role Justification</h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Provide justification for the selected roles and access levels.
-                  </p>
+                <div ref={homeBusinessUnitRef}>
+                  <MultiSelect
+                    options={businessUnitOptions}
+                    value={watch('homeBusinessUnit' as any) || []}
+                    onChange={handleBusinessUnitChange}
+                    placeholder="Select business units..."
+                    label="Home Business Unit"
+                    required
+                    error={(errors as any).homeBusinessUnit?.message}
+                    searchPlaceholder="Search business units..."
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Role Justification
-                    {hasSelectedRoles && <span className="text-red-500 ml-1">*</span>}
+                  <label className="block text-sm font-medium text-gray-700">
+                    Selected Business Units:
                   </label>
-                  <textarea
-                    {...register('roleJustification', {
-                      required: hasSelectedRoles ? 'Please provide justification for the requested roles' : false,
-                    })}
-                    rows={4}
-                    placeholder="Please explain why these specific roles are necessary for the employee's job responsibilities. Include details about their duties, the systems they need to access, and how these roles will be used in their daily work..."
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                  {errors.roleJustification && (
-                    <p className="mt-1 text-sm text-red-600">{errors.roleJustification.message}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Supervisor Approval Section */}
-              <div className="space-y-6">
-                <div className="border-b border-gray-200 pb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Supervisor Approval</h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Supervisor acknowledgment of role selections.
+                  <p className="mt-1 text-sm text-gray-900">
+                    {(() => {
+                      const watchedValue: any = watch('homeBusinessUnit' as any);
+                      const businessUnitsArray = Array.isArray(watchedValue)
+                        ? watchedValue
+                        : watchedValue
+                        ? [watchedValue]
+                        : [];
+                      return (
+                        businessUnitsArray
+                          .map((code: string) => {
+                            const unit = businessUnits.find((u) => u.businessUnit === code);
+                            return unit ? `${unit.description} (${unit.businessUnit})` : code;
+                          })
+                          .join(', ') || 'None selected'
+                      );
+                    })()}
                   </p>
                 </div>
+              </div>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <label className="flex items-start space-x-3">
-                    <input
-                      type="checkbox"
-                      {...register('supervisorApproval', {
-                        required: !hasSelectedRoles ? 'Supervisor approval is required when no roles are selected' : false,
-                      })}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-blue-800">
-                        Supervisor Approval
-                        {!hasSelectedRoles && <span className="text-red-500 ml-1">*</span>}
-                      </span>
-                      <p className="text-xs text-blue-700 mt-1">
-                        I acknowledge that I have reviewed the role selections above and confirm they are appropriate for this employee's job responsibilities.
-                        {!hasSelectedRoles && ' (Required when no specific roles are selected)'}
-                      </p>
-                    </div>
-                  </label>
-                  {errors.supervisorApproval && (
-                    <p className="mt-2 text-sm text-red-600">{errors.supervisorApproval.message}</p>
-                  )}
+              {/* Accounts Payable — unified single table */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    {/* Top blue header */}
+                    <thead style={{ backgroundColor: '#003865' }}>
+                      <tr>
+                        <th
+                          scope="col"
+                          colSpan={2}
+                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                        >
+                          ACCOUNTS PAYABLE (AP)
+                          <br />
+                          <span className="normal-case font-normal">
+                            (See also Vendor and Purchasing below)
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {/* AP basic role checkboxes */}
+                      <tr>
+                        <td className="px-6 py-4" colSpan={2}>
+                          <div className="grid grid-cols-2 gap-6">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('voucherEntry' as any)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">Voucher Entry</span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('maintenanceVoucherBuildErrors' as any)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">
+                                Maintenance of Voucher Build Errors
+                              </span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('matchOverride' as any)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">Match Override</span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('apInquiryOnly' as any)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">Accounts Payable Inquiry Only</span>
+                            </label>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* In-table blue subheader for Workflow Roles */}
+                      <tr>
+                        <th
+                          colSpan={2}
+                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                          style={{ backgroundColor: '#003865' }}
+                        >
+                          WORKFLOW ROLES
+                        </th>
+                      </tr>
+
+                      {/* Workflow header row */}
+                      <tr>
+                        <td className="px-4 py-2 bg-gray-100 font-medium text-sm w-56 whitespace-nowrap">
+                          Role
+                        </td>
+                        <td className="px-4 py-2 bg-gray-100 font-medium text-sm">
+                          Route Controls: Financial Department ID(s)
+                          <div className="text-xs italic text-gray-600 mt-1">
+                            (8 characters each; separate with commas || new lines)
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Voucher Approver 1 */}
+                      <tr>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('apVoucherApprover1' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Voucher Approver 1
+                          </label>
+                        </td>
+                        <td className="px-4 py-3">
+                          <textarea
+                            rows={2}
+                            {...register('apVoucherApprover1RouteControls' as any, {
+                              setValueAs: (v: string) =>
+                                (v ?? '')
+                                  .split(/[,\s]+/)
+                                  .map(s => s.trim().toUpperCase())
+                                  .filter(Boolean)
+                                  .join(','),
+                            })}
+                            placeholder="e.g. 12345678, 23456789 (or one per line)"
+                            className="w-full md:w-3/4 rounded-md border border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                          />
+                        </td>
+                      </tr>
+
+                      {/* Voucher Approver 2 */}
+                      <tr>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('apVoucherApprover2' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Voucher Approver 2
+                          </label>
+                        </td>
+                        <td className="px-4 py-3">
+                          <textarea
+                            rows={2}
+                            {...register('apVoucherApprover2RouteControls' as any, {
+                              setValueAs: (v: string) =>
+                                (v ?? '')
+                                  .split(/[,\s]+/)
+                                  .map(s => s.trim().toUpperCase())
+                                  .filter(Boolean)
+                                  .join(','),
+                            })}
+                            placeholder="e.g. 12345678, 23456789 (or one per line)"
+                            className="w-full md:w-3/4 rounded-md border border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                          />
+                        </td>
+                      </tr>
+
+                      {/* Voucher Approver 3 */}
+                      <tr>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('apVoucherApprover3' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Voucher Approver 3
+                          </label>
+                        </td>
+                        <td className="px-4 py-3">
+                          <textarea
+                            rows={2}
+                            {...register('apVoucherApprover3RouteControls' as any, {
+                              setValueAs: (v: string) =>
+                                (v ?? '')
+                                  .split(/[,\s]+/)
+                                  .map(s => s.trim().toUpperCase())
+                                  .filter(Boolean)
+                                  .join(','),
+                            })}
+                            placeholder="e.g. 12345678, 23456789 (or one per line)"
+                            className="w-full md:w-3/4 rounded-md border border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              {/* Submit Section */}
-              <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-                <div className="text-sm text-gray-600">
-                  {hasSelectedRoles ? (
-                    <div className="flex items-center text-green-600">
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      Roles selected - justification required
-                    </div>
-                  ) : (
-                    <div className="flex items-center text-yellow-600">
-                      <Info className="h-4 w-4 mr-1" />
-                      No roles selected - supervisor approval required
-                    </div>
-                  )}
-                </div>
+              {/* Accounts Receivable (AR) and Cash Management (CM) */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead style={{ backgroundColor: '#003865' }}>
+                      <tr>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                          colSpan={3}
+                        >
+                          ACCOUNTS RECEIVABLE (AR) AND CASH MANAGEMENT (CM)
+                          <br />
+                          <span className="normal-case font-normal">
+                            (See also General Ledger below for nVision reporting.)
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
 
-                <div className="flex space-x-4">
-                  <Link
-                    to="/"
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Cancel
-                  </Link>
-                  <button
-                    type="submit"
-                    disabled={saving || (!hasSelectedRoles && !selectedRoles.supervisorApproval)}
-                    className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                      saving || (!hasSelectedRoles && !selectedRoles.supervisorApproval)
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-                    }`}
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    {saving ? 'Saving...' : 'Submit Role Selections'}
-                  </button>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {/* Row 1 */}
+                      <tr>
+                        <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-200">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('cashMaintenance' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">
+                              Cash Maintenance
+                              <br />
+                              <em className="text-gray-600">(Payment Processing)</em>
+                            </span>
+                          </label>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-200">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('receivableSpecialist' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">
+                              <em>Receivable Specialist</em>
+                              <br />
+                              <em className="text-gray-600">(Account Maintenance)</em>
+                            </span>
+                          </label>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('receivableSupervisor' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">Receivable Supervisor*</span>
+                          </label>
+                        </td>
+                      </tr>
+
+                      {/* Row 2 */}
+                      <tr>
+                        <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-200">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('billingCreate' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">Billing Create</span>
+                          </label>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-200">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('billingSpecialist' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">
+                              <em>Billing Specialist</em>
+                            </span>
+                          </label>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('billingSupervisor' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">
+                              <em>Billing Supervisor*</em>
+                            </span>
+                          </label>
+                        </td>
+                      </tr>
+
+                      {/* Row 3 */}
+                      <tr>
+                        <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-200">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('customerMaintenanceSpecialist' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">
+                              Customer Maintenance
+                              <br />
+                              Specialist
+                            </span>
+                          </label>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm text-gray-900 border-r border-gray-200">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('arBillingSetup' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">AR/Billing Setup</span>
+                          </label>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('arBillingInquiryOnly' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">Receivable &amp; Billing Inquiry Only</span>
+                          </label>
+                        </td>
+                      </tr>
+
+                      {/* Row 4 - Cash Management Inquiry Only spans all columns */}
+                      <tr>
+                        <td colSpan={3} className="px-6 py-4">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('cashManagementInquiryOnly' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2">
+                              <em>Cash Management Inquiry Only</em>
+                            </span>
+                          </label>
+                        </td>
+                      </tr>
+
+                      {/* Supervisor note */}
+                      <tr>
+                        <td colSpan={3} className="px-6 py-4">
+                          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                            <p className="text-sm text-blue-800">
+                              <strong>
+                                * One type of approval power is available with each supervisor role. If approval power is needed, complete the applicable row(s) in Workflow section below.
+                              </strong>
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Workflow subheader */}
+                      <tr>
+                        <th
+                          colSpan={3}
+                          className="px-6 py-2 text-left text-xs font-semibold text-white uppercase tracking-wider"
+                          style={{ backgroundColor: '#003865' }}
+                        >
+                          Workflow for the supervisor roles
+                        </th>
+                      </tr>
+
+                      {/* Single header row */}
+                      <tr className="bg-gray-100">
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 w-64 whitespace-nowrap">
+                          Role
+                        </th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700" colSpan={2}>
+                          Route Controls: Business unit(s)
+                          <div className="text-xs italic text-gray-600 mt-1">
+                            (5 characters each; separate with commas || new lines)
+                          </div>
+                        </th>
+                      </tr>
+
+                      {/* Billing Supervisor row with checkbox + BU textarea */}
+                      <tr>
+                        <td className="px-4 py-3 border-r border-gray-200">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('billingSupervisor' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-700 whitespace-nowrap">
+                              <em>Billing Supervisor:</em> Credit invoice approval
+                            </span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3" colSpan={2}>
+                          <textarea
+                            {...register('creditInvoiceApprovalBusinessUnits' as any)}
+                            rows={2}
+                            placeholder="e.g. 12345, 23456 (or one per line)"
+                            className="w-80 px-3 py-2 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                          />
+                        </td>
+                      </tr>
+
+                      {/* Receivable Supervisor row with checkbox + BU textarea */}
+                      <tr>
+                        <td className="px-4 py-3 border-r border-gray-200">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('receivableSupervisor' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-700 whitespace-nowrap">
+                              <em>Receivable Supervisor:</em> Write-off approval
+                            </span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3" colSpan={2}>
+                          <textarea
+                            {...register('writeoffApprovalBusinessUnits' as any)}
+                            rows={2}
+                            placeholder="e.g. 12345, 23456 (or one per line)"
+                            className="w-80 px-3 py-2 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
+              </div>
+
+              {/* Budgets/Commitment Control & Appropriation Maintenance */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead style={{ backgroundColor: '#003865' }}>
+                      <tr>
+                        <th
+                          colSpan={6}
+                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                        >
+                          BUDGETS/COMMITMENT CONTROL (KK) &amp; APPROPRIATION MAINTENANCE APPLICATION "(A)"
+                          <br />
+                          <span className="normal-case font-normal">
+                            "(A)" denotes roles that provide access to Appropriation Maintenance Application.
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        {/* span the full table width */}
+                        <td className="px-6 py-4" colSpan={6}>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4 w-full">
+                            {[
+                              ['budgetJournalEntryOnline', 'Budget Journal Entry Online (A)'],
+                              ['budgetJournalLoad', 'Budget Journal Load'],
+                              ['journalApproverAppr', 'Journal Approver — Appropriation (A) *'],
+                              ['journalApproverExp',  'Journal Approver — Expense Budget *'],
+                              ['journalApproverRev',  'Journal Approver — Revenue Budget *'],
+                              ['budgetTransferEntryOnline', 'Budget Transfer Entry Online'],
+                              ['transferApprover', 'Transfer Approver *'],
+                              ['budgetInquiryOnly', 'Budget Inquiry Only'],
+                            ].map(([key, label]) => (
+                              <label key={key} className="flex items-center w-full">
+                                <input
+                                  type="checkbox"
+                                  {...register(key as any)}
+                                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-700">{label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Callout above Workflow for the approver roles */}
+                      <tr>
+                        <td className="px-6 py-4 text-sm text-gray-900" colSpan={6}>
+                          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                            <p className="text-sm text-blue-800">
+                              <strong>* If selecting either approver role, complete the applicable row(s) in the Workflow section below.</strong>
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* WORKFLOW FOR THE APPROVER ROLES */}
+                      <tr>
+                        <th
+                          colSpan={6}
+                          className="px-6 py-2 text-left text-xs font-semibold text-white uppercase tracking-wider"
+                          style={{ backgroundColor: '#0f2f54' }}
+                        >
+                          WORKFLOW FOR THE APPROVER ROLES
+                        </th>
+                      </tr>
+
+                      {/* Column headers */}
+                      <tr className="bg-gray-100">
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 w-64">
+                          Role
+                        </th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700" colSpan={5}>
+                          Route Controls: Business unit(s)
+                        </th>
+                      </tr>
+
+                      {/* Helper text row */}
+                      <tr className="bg-gray-100">
+                        <td className="px-4 py-1" />
+                        <td className="px-4 py-1 text-left text-xs text-gray-600 italic" colSpan={5}>
+                          (5 characters each; separate with commas || new lines)
+                        </td>
+                      </tr>
+
+                      {/* Journal Approver – Appropriation (A) */}
+                      <tr>
+                        <td className="px-4 py-3 text-[15px] text-gray-800">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('journalApproverAppr' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="whitespace-nowrap">Journal Approver – Appropriation (A)</span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3" colSpan={5}>
+                          <textarea
+                            {...register('journalApprovalA' as any)}
+                            placeholder="e.g. 12345, 23456 (or one per line)"
+                            className={`w-full min-h-[40px] ${inputStd} resize-y`}
+                          />
+                        </td>
+                      </tr>
+
+                      {/* Transfer Approver */}
+                      <tr>
+                        <td className="px-4 py-3 text-[15px] text-gray-800">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('transferApprover' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="whitespace-nowrap">Transfer Approver – Appropriation</span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3" colSpan={5}>
+                          <textarea
+                            {...register('transferApproval' as any)}
+                            placeholder="e.g. 12345, 23456 (or one per line)"
+                            className={`w-full min-h-[40px] ${inputStd} resize-y`}
+                          />
+                        </td>
+                      </tr>
+
+                      {/* Journal Approver – Expense Budget */}
+                      <tr>
+                        <td className="px-4 py-3 text-[15px] text-gray-800">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('journalApproverExp' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="whitespace-nowrap">Journal Approver – Expense Budget</span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3" colSpan={5}>
+                          <textarea
+                            {...register('journalApprovalExpense' as any)}
+                            placeholder="e.g. 12345, 23456 (or one per line)"
+                            className={`w-full min-h-[40px] ${inputStd} resize-y`}
+                          />
+                        </td>
+                      </tr>
+
+                      {/* Journal Approver – Revenue Budget */}
+                      <tr>
+                        <td className="px-4 py-3 text-[15px] text-gray-800">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('journalApproverRev' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="whitespace-nowrap">Journal Approver – Revenue Budget</span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3" colSpan={5}>
+                          <textarea
+                            {...register('journalApprovalRevenue' as any)}
+                            placeholder="e.g. 12345, 23456 (or one per line)"
+                            className={`w-full min-h-[40px] ${inputStd} resize-y`}
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* General Ledger (GL) and nVision Reporting */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    {/* Top blue header */}
+                    <thead style={{ backgroundColor: '#003865' }}>
+                      <tr>
+                        <th
+                          colSpan={3}
+                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                        >
+                          GENERAL LEDGER (GL) AND NVISION REPORTING
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {/* Row 1 */}
+                      <tr>
+                        <td className="px-4 py-3">
+                          <label className="inline-flex items-center">
+                            <input type="checkbox" {...register('journalEntryOnline' as any)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-800">Journal Entry Online</span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3">
+                          <label className="inline-flex items-center">
+                            <input type="checkbox" {...register('journalLoad' as any)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-800">Journal Load</span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3">
+                          <label className="inline-flex items-center">
+                            <input type="checkbox" {...register('agencyChartfieldMaintenance' as any)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-800">Agency Chartfield Maintenance</span>
+                          </label>
+                        </td>
+                      </tr>
+
+                      {/* Row 2 */}
+                      <tr>
+                        <td className="px-4 py-3">
+                          <label className="inline-flex items-start">
+                            <input type="checkbox" {...register('glAgencyApprover' as any)} className="mt-0.5 h-4 w-4  rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-800">
+                              GL Agency Approver
+                              <span className="block text-gray-600">(complete Workflow section below)</span>
+                            </span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3">
+                          <label className="inline-flex items-center">
+                            <input type="checkbox" {...register('generalLedgerInquiryOnly' as any)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-800">General Ledger Inquiry Only</span>
+                          </label>
+                        </td>
+                        <td className="px-4 py-3" />
+                      </tr>
+
+                      {/* Row 3 – nVision + Daily Receipts Yes/No */}
+                      <tr>
+                        <td className="px-4 py-3">
+                          <label className="inline-flex items-center">
+                            <input type="checkbox" {...register('nvisionReportingAgencyUser' as any)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-800">nVision Reporting Agency User</span>
+                          </label>
+                        </td>
+                        <td colSpan={2} className="px-4 py-3">
+                          <div className="flex items-center flex-wrap gap-3 text-sm text-gray-800">
+                            <span>Does the user need to run the Daily Receipts Report?</span>
+                            <label className="inline-flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('needsDailyReceiptsYes' as any, {
+                                  onChange: () => setDailyReceipts('yes'),
+                                })}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2">Yes</span>
+                            </label>
+                            <label className="inline-flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('needsDailyReceiptsNo' as any, {
+                                  onChange: () => setDailyReceipts('no'),
+                                })}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2">No</span>
+                            </label>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Workflow subheader */}
+                      <tr>
+                        <th
+                          colSpan={3}
+                          className="px-6 py-2 text-left text-xs font-semibold text-white uppercase tracking-wider"
+                          style={{ backgroundColor: '#003865' }}
+                        >
+                          WORKFLOW
+                        </th>
+                      </tr>
+
+                      {/* Workflow row: GL Agency Approver + Route Controls (Sources) */}
+                      <tr className="bg-gray-100">
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Role</th>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-700" colSpan={2}>
+                          Route Controls: Agency code(s) (3 characters each)
+                          <br />
+                          <span className="text-xs italic text-gray-500">
+                            e.g. ABC, XYZ (or one per line)
+                          </span>
+                        </th>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3">
+                          <label className="inline-flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('glAgencyApprover' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-800">GL Agency Approver</span>
+                          </label>
+                        </td>
+                        <td colSpan={2} className="px-4 py-3">
+                          <textarea
+                            {...register('glAgencyApproverSources' as any)}
+                            rows={2}
+                            placeholder="e.g. ABC, XYZ (or one per line)"
+                            className="w-80 px-3 py-2 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Grants */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead style={{ backgroundColor: '#003865' }}>
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider" colSpan="3">
+                          GRANTS (GM)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('awardDataEntry')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Award Data Entry
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('grantFiscalManager')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Grant Fiscal Manager
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('programManager')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Program Manager
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('gmAgencySetup')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            GM Agency Setup
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('grantsInquiryOnly')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Grants Inquiry Only
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {/* Empty cell to maintain 3-column layout */}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Project Costing */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead style={{ backgroundColor: '#003865' }}>
+                      <tr>
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                          colSpan={3}
+                        >
+                          PROJECT COSTING (PR)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('federalProjectInitiator')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">Federal Project Initiator</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('oimInitiator')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">OIM Initiator</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('projectInitiator')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">
+                              Project Initiator <br />(MNDOT Project Manager)
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+              
+                      <tr>
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('projectManager')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">Project Manager</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('capitalProgramsOffice')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">Capital Programs Office</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('projectCostAccountant')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">Project Cost Accountant</span>
+                          </div>
+                        </td>
+                      </tr>
+              
+                      <tr>
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('projectFixedAsset')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">Project Fixed Asset</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('categorySubcategoryManager')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">Category and Subcategory Manager</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('projectControlDates')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">Project Control Dates</span>
+                          </div>
+                        </td>
+                      </tr>
+              
+                      <tr>
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('projectAccountingSystems')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">Project Accounting Systems</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('mndotProjectsInquiry')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">MNDOT Projects Inquiry</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('projectsInquiryOnly')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            <span className="text-sm text-gray-900">Projects Inquiry Only</span>
+                          </div>
+                        </td>
+                      </tr>
+              
+                      <tr>
+                        <td className="px-6 py-4 text-sm text-gray-900" colSpan={3}>
+                          <div className="flex items-center space-x-6">
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('mndotProjectApprover')}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                              />
+                              <span className="text-sm text-gray-900">MNDOT Project Approver</span>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <span className="text-sm text-gray-700">Route Control:</span>
+                              <input
+                                type="text"
+                                {...register('routeControl')}
+                                className="px-3 py-1 border border-gray-300 rounded text-sm w-36"
+                                placeholder="Route Control"
+                              />
+                            </div>
+                            <span className="text-sm text-gray-700">Business Unit: BUT7901.</span>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Cost Allocation */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead style={{ backgroundColor: '#003865' }}>
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                          COST ALLOCATION ROLES
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-6 py-4">
+                          <label className="flex items-center">
+                            <input type="checkbox" {...register('costAllocationInquiryOnly')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-700">Cost Allocation Inquiry Only</span>
+                          </label>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Asset Management */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead style={{ backgroundColor: '#003865' }}>
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider" colSpan="2">
+                          ASSET MANAGEMENT (AM)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-6 py-4 text-sm text-gray-900" colSpan="2">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('financialAccountantAssets')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Financial Accountant - Assets
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-6 py-4 text-sm text-gray-900" colSpan="2">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('assetManagementInquiryOnly')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Asset Management Inquiry Only
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-6 py-4 text-sm text-gray-900" colSpan="2">
+                          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                            <p className="text-sm text-blue-800">
+                              <strong>* If approvals are needed also fill out the Workflow section below.</strong>
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider" colSpan="2" style={{ backgroundColor: '#003865' }}>
+                          Workflow roles
+                        </th>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 bg-gray-100 font-medium text-sm border-r border-gray-300 w-1/2">Role</td>
+                        <td className="px-4 py-2 bg-gray-100 font-medium text-sm w-1/2">Route Controls</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 border-r border-gray-300 text-sm text-gray-900">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('physicalInventoryApproval1')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Physical Inventory Approval 1
+                          </div>
+                        </td>
+                        {/* Physical Inventory Approval 1 – Business Units (multi) */}
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          <div>
+                            <span className="text-sm text-gray-700">Route Controls: Business unit(s)</span>
+                            <p className="mt-1 text-xs italic text-gray-500">
+                              (5 characters each; separate with commas || new lines)
+                            </p>
+                            <textarea
+                              {...register('physicalInventoryBusinessUnits')}
+                              rows={2}
+                              placeholder="e.g. 12345, 23456 (or one per line)"
+                              className="w-full h-16 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                            />
+                          </div>
+                        </td>
+
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3 border-r border-gray-300 text-sm text-gray-900">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('physicalInventoryApproval2')}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Physical Inventory Approval 2 (department transfers)
+                          </div>
+                        </td>
+                        {/* Physical Inventory Approval 2 – Department IDs (multi) */}
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          <div>
+                            <span className="text-sm text-gray-700">Route Controls: Department ID(s)</span>
+                            <p className="mt-1 text-xs italic text-gray-500">
+                              (8 characters each; separate with commas || new lines)
+                            </p>
+                            <textarea
+                              {...register('physicalInventoryDepartmentIds')}
+                              rows={2}
+                              placeholder="e.g. 12345678, 23456789 (or one per line)"
+                              className="w-full h-16 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Procurement header */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Procurement Role Selections</h3>
+              </div>
+
+              {/* Vendor Section */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead className="bg-green-600">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">VENDOR (VND)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-6 py-4">
+                          <div className="grid grid-cols-2 gap-6">
+                            <label className="flex items-center">
+                              <input type="checkbox" {...register('vendorRequestAddUpdate')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                              <span className="ml-2 text-sm text-gray-700">Vendor Request Add/Update</span>
+                            </label>
+                            <label className="flex items-center">
+                              <input type="checkbox" {...register('vendorInquiryOnly')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                              <span className="ml-2 text-sm text-gray-700">Vendor Inquiry Only</span>
+                            </label>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Combined PO/ePRO + Workflow Role Table */}
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg mb-6">
+                <table className="min-w-full divide-y divide-gray-300">
+                  <thead className="bg-green-600">
+                    <tr>
+                      <th colSpan={2} className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                        PURCHASING (PO) & ePROCUREMENT (ePRO) (See also Accounts Payable above)
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    <tr>
+                      <td colSpan={2} className="px-6 py-4">
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <label className="flex items-start">
+                              <input type="checkbox" {...register('poEproBuyer')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-1" />
+                              <span className="ml-3 text-sm text-gray-700">PO/ePRO Buyer</span>
+                            </label>
+
+                            <label className="flex items-start">
+                              <input type="checkbox" {...register('contractEncumbrance')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-1" />
+                              <span className="ml-3 text-sm text-gray-700">Contract Encumbrance</span>
+                            </label>
+                          </div>
+
+                          <div className="bg-gray-50 p-4 rounded">
+                            <div className="text-sm text-gray-700 mb-3">
+                              <strong>Defaults:</strong> <em>Location is required; all others optional.</em>
+                            </div>
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-sm text-gray-700">Location Code (required):</label>
+                                <input type="text" {...register('poLocationCode')} className="ml-2 px-2 py-1 border border-gray-300 rounded text-sm w-32" />
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-sm text-gray-700">Ship To</label>
+                                  <input type="text" {...register('poShipTo')} className="block w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1" />
+                                </div>
+                                <div>
+                                  <label className="text-sm text-gray-700">Origin (3 characters)</label>
+                                  <input type="text" {...register('poOrigin')} maxLength={3} className="block w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colSpan={2} className="px-6 py-4">
+                        <div className="grid grid-cols-2 gap-6">
+                          <label className="flex items-start">
+                            <input type="checkbox" {...register('purchaseOrderDataEntry')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-1" />
+                            <span className="ml-3 text-sm text-gray-700">Purchase Order Data Entry Only</span>
+                          </label>
+
+                          <div className="bg-gray-50 p-4 rounded">
+                            <div className="text-sm text-gray-700 mb-3">
+                              <strong>Defaults:</strong> <em>Location is required; all others optional.</em>
+                            </div>
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-sm text-gray-700">Location Code (required)</label>
+                                <input type="text" {...register('poDataEntryLocationCode')} className="ml-2 px-2 py-1 border border-gray-300 rounded text-sm w-32" />
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-sm text-gray-700">Ship To</label>
+                                  <input type="text" {...register('poDataEntryShipTo')} className="block w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1" />
+                                </div>
+                                <div>
+                                  <label className="text-sm text-gray-700">Origin (3 characters)</label>
+                                  <input type="text" {...register('poDataEntryOrigin')} maxLength={3} className="block w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td colSpan={2} className="px-6 py-4">
+                        <div className="grid grid-cols-2 gap-6">
+                          <label className="flex items-start">
+                            <input type="checkbox" {...register('eproRequisitionRequester')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-1" />
+                            <span className="ml-3 text-sm text-gray-700">ePRO Requisition Requester</span>
+                          </label>
+
+                          <div className="bg-gray-50 p-4 rounded">
+                            <div className="text-sm text-gray-700 mb-3">
+                              <strong>Default chartfield values:</strong>
+                            </div>
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-[13px] text-gray-700">Fund</label>
+                                <input type="text" {...register('eproFund')} className="block w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1" />
+                              </div>
+                              <div>
+                                <label className="text-[13px] text-gray-700">Fin. Department ID (8 characters; 4th char must be 3, 4, || 5)</label>
+                                <input type="text" {...register('eproFinDepartmentId')} maxLength={8} className="block w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1" />
+                              </div>
+                              <div>
+                                <label className="text-[13px] text-gray-700">Appropriation ID (7 characters)</label>
+                                <input type="text" {...register('eproAppropriationId')} maxLength={7} className="block w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-700">Agency Cost</label>
+                                <input type="text" {...register('eproAgencyCost1')} className="block w-full px-2 py-1 border border-gray-300 rounded text-sm mt-1" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Additional procurement roles */}
+                    <tr>
+                      <td colSpan={2} className="px-6 py-4">
+                        <div className="grid grid-cols-3 gap-6">
+                          <label className="flex items-center">
+                            <input type="checkbox" {...register('poAccountingCoordinator')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-700">PO Accounting Coordinator</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input type="checkbox" {...register('coreOrderReceiver')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-700">CORE Order Receiver</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input type="checkbox" {...register('poInquiryOnly')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-700">PO Inquiry Only</span>
+                          </label>
+                        </div>
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td colSpan={2} className="px-6 py-4">
+                        <div className="grid grid-cols-2 gap-6">
+                          <label className="flex items-center">
+                            <input type="checkbox" {...register('eproRequisitionInquiryOnly')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <span className="ml-2 text-sm text-gray-700">ePRO Requisition Inquiry Only</span>
+                          </label>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Workflow subheader */}
+                    <tr>
+                      <th colSpan={2} className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider bg-green-700">
+                        Workflow Roles
+                      </th>
+                    </tr>
+
+                    {/* PO Approver workflow */}
+                    <tr>
+                      <td className="px-4 py-3 text-sm text-gray-700 w-1/3">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('poApprover')}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                          />
+                          PO Approver
+                        </label>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <label className="text-sm text-gray-700">
+                            Route Controls: Financial Department ID(s) (8 characters each)
+                          </label>
+                          <input
+                            type="text"
+                            {...register('poApproverRouteControls')}
+                            className="mt-1 block w-full px-3 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="e.g. 123A5678, 234B5678 345C5678"
+                          />
+                          <p className="mt-1 text-xs text-gray-500">
+                            Tip: You can paste multiple IDs. We'll clean & split them for you.
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Purchasing Cards (PO) */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300 border">
+                    <thead className="bg-green-600">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                          Purchasing Cards (PO)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {[
+                        ['pCardAgencyAdministrator', 'PCard Agency Administrator (includes all PCard Reconciler and Reviewer permissions plus user and agency setup power)'],
+                        ['pCardApprover', 'PCard Approver (includes PCard Reconciler and Reviewer permissions plus approval power)'],
+                        ['pCardReconciler', 'PCard Reconciler (includes PCard Reviewer permissions plus update power)'],
+                        ['pCardReviewer', 'PCard Reviewer (inquiry role; user can add comments and attachments)'],
+                      ].map(([key, label]) => (
+                        <tr key={key}>
+                          <td className="px-6 py-4">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register(key as any)}
+                                className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">{label}</span>
+                            </label>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Strategic Sourcing (SS) + Catalog Management (CG) */}
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg mb-6">
+                <table className="min-w-full border border-gray-300 border-collapse">
+                  <thead>
+                    <tr>
+                      <th
+                        colSpan={2}
+                        className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider bg-green-600"
+                      >
+                        STRATEGIC SOURCING (SS)
+                      </th>
+                    </tr>
+                  </thead>
+              
+                  <tbody className="bg-white divide-y divide-gray-300">
+                    {/* Row 1 */}
+                    <tr>
+                      {/* Event Creator/Buyer */}
+                      <td className="px-6 py-4 border-r border-gray-300">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('ssEventCreatorBuyer')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <span className="text-sm text-gray-700 font-medium">Event Creator/Buyer</span>
+                          </div>
+                        </label>
+                        <div className="pl-6 text-sm text-gray-600">
+                          Also complete the entire Specific authorizations section below. Every buyer also needs the Event Approver role below.
+                        </div>
+                      </td>
+              
+                      {/* Create Vendor Response */}
+                      <td className="px-6 py-4">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('ssCreateVendorResponse')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <span className="text-sm text-gray-700 font-medium">Create a Vendor Response (RESPOND)</span>
+                          </div>
+                        </label>
+                      </td>
+                    </tr>
+              
+                    {/* Row 2: three roles */}
+                    <tr>
+                      <td colSpan={2} className="px-0 py-0">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-gray-300">
+                          {/* Event Approver */}
+                          <div className="px-6 py-4">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('ssEventApprover')}
+                                className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <div>
+                                <span className="text-sm text-gray-700 font-medium">Event Approver</span>
+                                <div className="text-sm text-gray-600">(Buyer and Ad Hoc)</div>
+                              </div>
+                            </label>
+                          </div>
+              
+                          {/* Event Collaborator */}
+                          <div className="px-6 py-4">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('ssEventCollaborator')}
+                                className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <div>
+                                <span className="text-sm text-gray-700 font-medium">Event Collaborator</span>
+                              </div>
+                            </label>
+                          </div>
+              
+                          {/* Event Inquiry Only */}
+                          <div className="px-6 py-4">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('ssEventInquiryOnly')}
+                                className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <div>
+                                <span className="text-sm text-gray-700 font-medium">Event Inquiry Only</span>
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+              
+                    {/* Specific authorizations header */}
+                    <tr>
+                      <td colSpan={2} className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider bg-green-600">
+                        Specific authorizations: required for all Strategic Sourcing roles.
+                      </td>
+                    </tr>
+              
+                    {/* Business units */}
+                    <tr>
+                      <td colSpan={2} className="px-6 py-4">
+                        <label className="flex items-center text-sm text-gray-700">
+                          <span className="mr-3">Business unit(s) (5 characters)</span>
+                          <input
+                            type="text"
+                            {...register('ssBusinessUnits')}
+                            maxLength={5}
+                            className={`${rcInputClasses} w-32`}
+                          />
+                        </label>
+                      </td>
+                    </tr>
+              
+                    {/* Origins */}
+                    <tr>
+                      <td className="px-6 py-4 border-r border-gray-300">
+                        <label className="flex items-center text-sm text-gray-700">
+                          <span className="mr-3">Origins: Check here for all origins within the business unit(s)</span>
+                          <input
+                            type="checkbox"
+                            {...register('ssAllOrigins')}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </label>
+                      </td>
+                      <td className="px-6 py-4">
+                        <label className="block text-sm text-gray-700 mb-2">
+                          Or enter selected origins (3 characters)
+                        </label>
+                        <input
+                          type="text"
+                          {...register('ssSelectedOrigins')}
+                          maxLength={3}
+                          className={`${rcInputClasses} w-24`}
+                        />
+                      </td>
+                    </tr>
+              
+                    {/* Defaults */}
+                    <tr>
+                      <td className="px-6 py-4 border-r border-gray-300">
+                        <label className="flex items-center text-sm text-gray-700">
+                          <span className="mr-3">Default business unit (optional)</span>
+                          <input
+                            type="text"
+                            {...register('ssDefaultBusinessUnit')}
+                            className={`${rcInputClasses} w-32`}
+                          />
+                        </label>
+                      </td>
+                      <td className="px-6 py-4">
+                        <label className="flex items-center text-sm text-gray-700">
+                          <span className="mr-3">Default origin (optional)</span>
+                          <input
+                            type="text"
+                            {...register('ssDefaultOrigin')}
+                            className={`${rcInputClasses} w-24`}
+                          />
+                        </label>
+                      </td>
+                    </tr>
+              
+                    {/* Authorized template types */}
+                    <tr>
+                      <td colSpan={2} className="px-6 py-4">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full border border-gray-300 border-collapse divide-y divide-gray-300">
+                            <thead>
+                              <tr>
+                                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                                  Authorized template types for Creator/Buyer role only
+                                </th>
+                                <th className="px-4 py-2 text-center text-sm font-medium text-gray-700">Create?</th>
+                                <th className="px-4 py-2 text-center text-sm font-medium text-gray-700">Update?</th>
+                                <th className="px-4 py-2 text-center text-sm font-medium text-gray-700">Delete?</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-300">
+                              {ssTemplateRows.map((tmpl) => {
+                                const keyBase = tmpl.replace(/\s+/g, '').toLowerCase();
+                                return (
+                                  <tr key={tmpl}>
+                                    <td className="px-4 py-2 text-sm text-gray-700 border-r border-gray-300">{tmpl}</td>
+                                    {ssActions.map((act) => {
+                                      const yesKey = `ss${act}${keyBase}Yes`;
+                                      const noKey = `ss${act}${keyBase}No`;
+                                      return (
+                                        <td key={act} className="px-4 py-2 text-center">
+                                          <label className="inline-flex items-center mr-2">
+                                            <input
+                                              type="checkbox"
+                                              {...register(yesKey as any)}
+                                              className="h-4 w-4 mr-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            Y
+                                          </label>
+                                          <label className="inline-flex items-center">
+                                            <input
+                                              type="checkbox"
+                                              {...register(noKey as any)}
+                                              className="h-4 w-4 mr-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            N
+                                          </label>
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+              
+                    {/* Workflow roles */}
+                    <tr>
+                      <td colSpan={2} className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider bg-green-600">
+                        Workflow roles for professional and technical events (routing based on BU(s) and origin(s) above)
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colSpan={2} className="px-6 py-4 space-y-2">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('ssTechCoordApprover')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <span className="text-sm text-gray-700 font-medium">
+                              Professional || Technical Coordinator Approver
+                            </span>
+                            <div className="text-sm text-gray-600">(first level)</div>
+                          </div>
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('ssTechStateApprover')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <span className="text-sm text-gray-700 font-medium">
+                              Professional || Technical State Agency Approver
+                            </span>
+                            <div className="text-sm text-gray-600">(second level)</div>
+                          </div>
+                        </label>
+                      </td>
+                    </tr>
+              
+                    {/* Grant events */}
+                    <tr>
+                      <td colSpan={2} className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider bg-green-600">
+                        Workflow role for grant events (routing based on BU(s) and origin(s) above)
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colSpan={2} className="px-6 py-4">
+                        <label className="flex items-center">
+                          <input 
+                            type="checkbox"
+                            {...register('ssGrantCoordApprover')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <span className="text-sm text-gray-700 font-medium">Grant Coordinator Approver</span>
+                            <div className="text-sm text-gray-600">(first level)</div>
+                          </div>
+                        </label>
+                      </td>
+                    </tr>
+              
+                    {/* Catalog Management (CG) */}
+                    <tr>
+                      <td colSpan={2} className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider bg-green-600">
+                        CATALOG MANAGEMENT (CG)
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-6 py-4 border-r border-gray-300">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('cgCatalogOwner')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <span className="text-sm text-gray-700 font-medium">Catalog Owner</span>
+                          </div>
+                        </label>
+                      </td>
+                      <td className="px-6 py-4">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('cgInquiryOnly')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <span className="text-sm text-gray-700 font-medium">Catalog Management Inquiry Only</span>
+                          </div>
+                        </label>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Supplier Contracts (SC) */}
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg mb-6">
+                <table className="min-w-full border border-gray-300 border-collapse">
+                  <thead>
+                    <tr>
+                      <th
+                        colSpan={2}
+                        className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider bg-green-600"
+                      >
+                        SUPPLIER CONTRACTS (SC)
+                      </th>
+                    </tr>
+                  </thead>
+              
+                  <tbody className="bg-white divide-y divide-gray-300">
+                    {/* Row 1 */}
+                    <tr>
+                      <td className="px-6 py-4 border-r border-gray-300 space-y-2">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('scContractAdministrator')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">Contract Administrator</span>
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('scDocumentAdministrator')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">Document Administrator</span>
+                        </label>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700">
+                        This user needs to update contracts || documents created by the users listed below.
+                        The default is no power to update items created by other users.
+                      </td>
+                    </tr>
+              
+                    {/* Supplier Preferences with Upload button */}
+                    <tr className="bg-gray-100">
+                      <td className="px-4 py-2 font-medium text-sm text-gray-700 border-r border-gray-300">
+                        Supplier Contract Preferences
+                      </td>
+                      <td className="px-4 py-2 flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Enter details below || upload.</span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          Upload Preferences
+                        </button>
+                      </td>
+                    </tr>
+              
+                    {/* Employee IDs */}
+                    <tr>
+                      <td className="px-6 py-4 border-r border-gray-300 text-sm text-gray-700">
+                        Employee IDs of other users
+                      </td>
+                      <td className="px-6 py-4">
+                        <textarea
+                          {...register('scOtherEmployeeIds')}
+                          rows={2}
+                          className="block w-full rounded-md border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                        />
+                      </td>
+                    </tr>
+              
+                    {/* Names */}
+                    <tr>
+                      <td className="px-6 py-4 border-r border-gray-300 text-sm text-gray-700">
+                        Names of the users
+                      </td>
+                      <td className="px-6 py-4">
+                        <textarea
+                          {...register('scOtherEmployeeNames')}
+                          rows={2}
+                          className="block w-full rounded-md border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                        />
+                      </td>
+                    </tr>
+              
+                    {/* Thin gray separator row */}
+                    <tr>
+                      <td colSpan={2} className="bg-gray-100 h-2 p-0"></td>
+                    </tr>
+              
+                    {/* Collaborator + right-side roles */}
+                    <tr>
+                      <td className="px-6 py-4 border-r border-gray-300 whitespace-nowrap">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('scDocumentCollaborator')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">Document Collaborator</span>
+                        </label>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-6">
+                          <label className="flex items-center whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              {...register('scAgreementManager')}
+                              className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-700">Agreement (Compliance) Manager</span>
+                          </label>
+                          <label className="flex items-center whitespace-nowrap pl-6 border-l border-gray-300">
+                            <input
+                              type="checkbox"
+                              {...register('scAgencyLibraryManager')}
+                              className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-700">Agency Library Manager</span>
+                          </label>
+                        </div>
+                      </td>
+                    </tr>
+              
+                    {/* Inquiry / Approver */}
+                    <tr>
+                      <td className="px-6 py-4 border-r border-gray-300">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('scContractInquiryOnly')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">Contract Inquiry Only</span>
+                        </label>
+                      </td>
+                      <td className="px-6 py-4">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('scContractualApprover')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">Contractual (Document) Approver</span>
+                        </label>
+                      </td>
+                    </tr>
+              
+                    {/* Electronic docs question */}
+                    <tr>
+                      <td className="px-6 py-4 border-r border-gray-300 text-sm text-gray-700">
+                        Does the agency create electronic documents in SWIFT and route for electronic signatures
+                      </td>
+                      <td className="px-6 py-4 space-y-2">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('scElectronicDocsYes')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">YES. SWIFT DocuSign Account Needed</span>
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('scElectronicDocsNo')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">NO. Routes for Signature outside of SWIFT</span>
+                        </label>
+                      </td>
+                    </tr>
+              
+                    {/* Workflow roles */}
+                    <tr>
+                      <td
+                        colSpan={2}
+                        className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider bg-green-600"
+                      >
+                        Workflow roles
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2 bg-gray-100 font-medium text-sm border-r border-gray-300 w-1/2">
+                        Role
+                      </td>
+                      <td className="px-4 py-2 bg-gray-100 font-medium text-sm w-1/2">
+                        Route Controls
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 border-r border-gray-300 text-sm text-gray-900">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            {...register('scDocContractCoordinator')}
+                            className="h-4 w-4 mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span>Document/Contract Coordinator</span>
+                        </label>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        <div className="space-y-2">
+                          <p className="text-sm text-gray-600">
+                            Routing for this role is based on business unit and origin, so you must enter values for both.
+                          </p>
+                          <div>
+                            <span className="text-sm text-gray-700">Business unit (5 characters):</span>
+                            <input
+                              type="text"
+                              {...register('scDocApproverBusinessUnit')}
+                              className="ml-2 px-2 py-1 border border-gray-300 rounded text-sm w-32"
+                              placeholder="Business unit"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-700">Origin (3 characters):</span>
+                            <input
+                              type="text"
+                              {...register('scDocApproverOrigin')}
+                              className="ml-2 px-2 py-1 border border-gray-300 rounded text-sm w-24"
+                              placeholder="Origin"
+                            />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Inventory */}
+              <div className="overflow-hidden shadow ring-1 ring-black/5 md:rounded-lg">
+                <table className="min-w-full divide-y divide-gray-300">
+                  <thead className="bg-green-600">
+                    <tr>
+                      <th
+                        colSpan={3}
+                        className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                      >
+                        INVENTORY (IN)
+                      </th>
+                    </tr>
+                  </thead>
+              
+                  <tbody className="bg-white">
+                    <tr>
+                      <td colSpan={3} className="p-0">
+                        {/* Row 1 */}
+                        <div className="grid grid-cols-1 md:grid-cols-3">
+                          <div className="p-4 border-b md:border-b-0 md:border-r border-gray-200">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryExpressIssue')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Express Issue (Counter Sale)
+                              </span>
+                            </label>
+                          </div>
+                          <div className="p-4 border-b md:border-b-0 md:border-r border-gray-200">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryAdjustmentApprover')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory Adjustment Approver
+                              </span>
+                            </label>
+                          </div>
+                          <div className="p-4">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryReplenishmentBuyer')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory (Replenishment) Buyer
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+              
+                        {/* Row 2 */}
+                        <div className="grid grid-cols-1 md:grid-cols-3">
+                          <div className="p-4 border-b md:border-b-0 md:border-r border-gray-200">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryControlWorker')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory Control (Warehouse Worker)
+                              </span>
+                            </label>
+                          </div>
+                          <div className="p-4 border-b md:border-b-0 md:border-r border-gray-200">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryExpressPutaway')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory Express Putaway
+                              </span>
+                            </label>
+                          </div>
+                          <div className="p-4">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryFulfillmentSpecialist')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory Fulfillment Specialist
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+              
+                        {/* Row 3 (PO Receiver has stacked field) */}
+                        <div className="grid grid-cols-1 md:grid-cols-3">
+                          <div className="p-4 border-b md:border-b-0 md:border-r border-gray-200">
+                            <div className="flex items-start">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryPoReceiver')}
+                                className="h-4 w-4 shrink-0 mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <div className="ml-2 w-full">
+                                <div className="text-sm leading-5 text-gray-700">
+                                  Inventory PO (&amp; Non-PO) Receiver
+                                </div>
+                                <label className="mt-1 block text-xs text-gray-600">
+                                  Ship-to location (required)
+                                </label>
+                                <input
+                                  type="text"
+                                  {...register('shipToLocation')}
+                                  placeholder="Enter ship-to location"
+                                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm leading-5 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="p-4 border-b md:border-b-0 md:border-r border-gray-200">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryReturnsReceiver')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Returns Receiver (Interunit &amp; RMA)
+                              </span>
+                            </label>
+                          </div>
+                          <div className="p-4">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryCostAdjustment')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory Cost Adjustment
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+              
+                        {/* Row 4 */}
+                        <div className="grid grid-cols-1 md:grid-cols-3">
+                          <div className="p-4 border-b md:border-b-0 md:border-r border-gray-200">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryMaterialsManager')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory Materials Manager (Mobile Inventory)
+                              </span>
+                            </label>
+                          </div>
+                          <div className="p-4 border-b md:border-b-0 md:border-r border-gray-200">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryDelivery')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory Delivery
+                              </span>
+                            </label>
+                          </div>
+                          <div className="p-4">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryInquiryOnly')}
+                                className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory Inquiry Only
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+              
+                        {/* Row 5 (spans all columns) */}
+                        <div className="grid grid-cols-1">
+                          <div className="p-4">
+                            <label className="flex items-start">
+                              <input
+                                type="checkbox"
+                                {...register('inventoryConfigurationAgency')}
+                                className="h-4 w-4 shrink-0 mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm leading-5 text-gray-700">
+                                Inventory Configuration-Agency: This is a very powerful role. It is only for experienced
+                                inventory administrators—at most, a few per agency.
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+                 
+              {/* Special role for the Department of Transportation (DOT) only */}
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg mt-6"> 
+                <table className="min-w-full divide-y divide-gray-300 table-fixed">
+                  <thead className="bg-green-600">
+                    <tr>
+                      <th
+                        colSpan={2}
+                        className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                      >
+                        Special role for the Department of Transportation (DOT) only
+                      </th>
+                    </tr>
+                  </thead>
+                
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    <tr>
+                      {/* widen first column */}
+                      <td className="px-6 py-4 border-r border-gray-200 w-2/5">
+                        <label className="flex items-center whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            {...register('inventoryPickPlanDistributionRelease')}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">
+                            Pick Plan Report Distribution (Release)
+                          </span>
+                        </label>
+                      </td>
+                    
+                      {/* narrower second column */}
+                      <td className="px-6 py-4 w-3/5 align-top">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Enter needed <em>inventory</em> business unit(s)
+                          <br />
+                          (5 characters each; examples: CS000 for Central Shop, OD000 for Oakdale):
+                        </label>
+                        <input
+                          type="text"
+                          {...register('inventoryDotUnits')}
+                          className={`${rcInputClasses} w-40`}
+                          maxLength={5}
+                          placeholder="Enter business unit codes"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+ 
+              {/* Role Justification */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
+                  Role Justification
+                </h3>
+                <div>
+                  <label htmlFor="roleJustification" className="block text-sm font-medium text-gray-700">
+                    Please provide justification for the selected roles and permissions
+                  </label>
+                  <textarea
+                    id="roleJustification"
+                    {...register('roleJustification')}
+                    rows={4}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                    placeholder="Explain why these specific roles and permissions are needed for this user's job responsibilities..."
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex justify-end space-x-4">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Save className="mr-2 h-5 w-5" />
+                  {saving ? 'Saving...' : 'Save Role Selections'}
+                </button>
               </div>
             </form>
           </div>

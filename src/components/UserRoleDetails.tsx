@@ -19,12 +19,6 @@ function UserRoleDetails({ userDetails, roleSelections, onEditRoles }: UserRoleD
 
   // Copies this user's roles into localStorage then navigates to the Select Roles page
   const handleCopyRoles = () => {
-    // Clear any existing copy flow data first
-    localStorage.removeItem('editingCopiedRoles');
-    localStorage.removeItem('pendingFormData');
-    localStorage.removeItem('copiedRoleSelections');
-    localStorage.removeItem('copiedUserDetails');
-    
     // Pick the best source of role fields
     const rolesSource =
       (roleSelections?.role_selection_json &&
@@ -33,7 +27,7 @@ function UserRoleDetails({ userDetails, roleSelections, onEditRoles }: UserRoleD
       roleSelections ||
       {};
 
-    // Basic info for the target form header - this should be minimal
+    // Basic info for the target form header
     localStorage.setItem(
       'pendingFormData',
       JSON.stringify({
