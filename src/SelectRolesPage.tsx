@@ -755,6 +755,16 @@ function SelectRolesPage() {
       
       const isCopyFlow = editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
 
+      if (!isCopyFlow) {
+        // Clean up any lingering copy artifacts so a new request starts clean
+        if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
+          localStorage.removeItem('editingCopiedRoles');
+          localStorage.removeItem('pendingFormData');
+          localStorage.removeItem('copiedRoleSelections');
+          localStorage.removeItem('copiedUserDetails');
+        }
+      }
+
       if (isCopyFlow) {
         setIsEditingCopiedRoles(true);
         try {
