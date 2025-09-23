@@ -4,6 +4,7 @@
 // - Submit guard now re-checks using the submitted form values to avoid false negatives.
 // - Payroll Components table now renders THREE columns matching HR layout.
 // - Reminder: any checkbox not wired with register(...) and not listed in ROLE_FLAG_KEYS won't count.
+// - FIXED: Added copy flow support to handle "Copy Roles" functionality
 // -------------------
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -110,6 +111,28 @@ interface HrPayrollRoleSelection {
   // justification
   roleJustification: string;
 }
+
+// Copy flow form type for when copying from existing user
+type CopyFlowForm = {
+  startDate: string;
+  employeeName: string;
+  employeeId?: string;
+  isNonEmployee?: boolean;
+  workLocation?: string;
+  workPhone?: string;
+  email: string;
+  agencyName: string;
+  agencyCode: string;
+  justification?: string;
+  submitterName: string;
+  submitterEmail: string;
+  supervisorName: string;
+  supervisorUsername: string;
+  securityAdminName: string;
+  securityAdminUsername: string;
+  hrDirector?: string;
+  hrDirectorEmail?: string;
+};
 
 // list of checkbox keys we actually render, to persist as booleans
 const ROLE_FLAG_KEYS: (keyof HrPayrollRoleSelection)[] = [
@@ -225,6 +248,7 @@ function HrPayrollRoleSelectionPage() {
     agency_name?: string;
     agency_code?: string;
   } | null>(null);
+  const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
 
   // agency multiselect local state. Do not pre-populate.
   const [selectedAgencyCodes, setSelectedAgencyCodes] = useState<string[]>([]);
@@ -292,13 +316,101 @@ function HrPayrollRoleSelectionPage() {
           });
           
           // Map copied role data to form fields
-          Object.entries(roleData).forEach(([key, value]) => {
-            if (typeof value === 'boolean' && value === true) {
-              setValue(key as keyof HrPayrollRoleSelection, value as any, { shouldDirty: false });
-            } else if (typeof value === 'string' && value.trim()) {
-              setValue(key as keyof HrPayrollRoleSelection, value as any, { shouldDirty: false });
+          if (roleData) {
+            // Map database fields to form fields
+            const mappings: Record<string, keyof HrPayrollRoleSelection> = {
+              admin_testing_all_correct: 'adminTestingAllCorrect',
+              admin_testing_enroll_update: 'adminTestingEnrollUpdate',
+              admin_testing_view_only: 'adminTestingViewOnly',
+              admin_testing_company_property_correct: 'adminTestingCompanyPropertyCorrect',
+              emergency_contact_update: 'emergencyContactUpdate',
+              emergency_contact_view: 'emergencyContactView',
+              employment_data_update: 'employmentDataUpdate',
+              general_data_correct: 'generalDataCorrect',
+              general_data_update: 'generalDataUpdate',
+              general_data_view: 'generalDataView',
+              adjustments_retro_pay_update: 'adjustmentsRetroPayUpdate',
+              adjustments_retro_pay_view: 'adjustmentsRetroPayView',
+              adjustments_retro_pay_view_inquire: 'adjustmentsRetroPayViewInquire',
+              balances_paycheck_view: 'balancesPaycheckView',
+              business_expense_update: 'businessExpenseUpdate',
+              business_expense_view: 'businessExpenseView',
+              business_expense_view_inquire: 'businessExpenseViewInquire',
+              direct_deposit_update_correct: 'directDepositUpdateCorrect',
+              direct_deposit_view: 'directDepositView',
+              dept_tbl_payroll_view: 'deptTblPayrollView',
+              expense_transfers_update: 'expenseTransfersUpdate',
+              expense_transfers_view: 'expenseTransfersView',
+              expense_transfers_view_inquire: 'expenseTransfersViewInquire',
+              garnishment_view: 'garnishmentView',
+              labor_distribution_update: 'laborDistributionUpdate',
+              labor_distribution_view: 'laborDistributionView',
+              leave_update: 'leaveUpdate',
+              leave_view: 'leaveView',
+              mass_time_entry_update_correct: 'massTimeEntryUpdateCorrect',
+              mass_time_entry_view: 'massTimeEntryView',
+              payroll_data_update_correct: 'payrollDataUpdateCorrect',
+              payroll_data_view: 'payrollDataView',
+              schedules_update: 'schedulesUpdate',
+              schedules_view: 'schedulesView',
+              self_service_time_entry_admin: 'selfServiceTimeEntryAdmin',
+              self_service_time_entry_view: 'selfServiceTimeEntryView',
+              adjustments_bene_adm_base: 'adjustmentsBeneAdmBase',
+              adjustments_bene_adm_auto: 'adjustmentsBeneAdmAuto',
+              adjustments_bene_billing: 'adjustmentsBeneBilling',
+              bene_aca_eligibility_update: 'beneACAEligibilityUpdate',
+              mn_state_college_bene_reports: 'mnStateCollegeBeneReports',
+              recruit_recruiter: 'recruitRecruiter',
+              recruit_recruiter_limited: 'recruitRecruiterLimited',
+              recruit_affirmative_action: 'recruitAffirmativeAction',
+              recruit_hiring_manager: 'recruitHiringManager',
+              health_safety_view: 'healthSafetyView',
+              job_data_correct: 'jobDataCorrect',
+              job_data_update: 'jobDataUpdate',
+              job_data_view: 'jobDataView',
+              labor_relations_update: 'laborRelationsUpdate',
+              labor_relations_view: 'laborRelationsView',
+              manage_competencies_update: 'manageCompetenciesUpdate',
+              manage_competencies_view: 'manageCompetenciesView',
+              personal_data_correct: 'personalDataCorrect',
+              personal_data_update: 'personalDataUpdate',
+              personal_data_view: 'personalDataView',
+              physical_exams_update: 'physicalExamsUpdate',
+              physical_exams_view: 'physicalExamsView',
+              position_data_correct: 'positionDataCorrect',
+              position_data_update: 'positionDataUpdate',
+              position_data_view: 'positionDataView',
+              position_funding_correct: 'positionFundingCorrect',
+              position_funding_update: 'positionFundingUpdate',
+              position_funding_view: 'positionFundingView',
+              add_access_type: 'addAccessType',
+              agency_codes: 'agencyCodes',
+              department_id: 'departmentId',
+              prohibited_department_ids: 'prohibitedDepartmentIds',
+              role_justification: 'roleJustification'
+            };
+
+            Object.entries(mappings).forEach(([dbField, formField]) => {
+              if (roleData[dbField] !== undefined) {
+                setValue(formField, roleData[dbField], { shouldDirty: false });
+              }
+            });
+
+            // Handle agency codes if present
+            const fromArray = normalizeCodes(roleData.other_business_units);
+            const fromCsv = normalizeCodes(roleData.agency_codes);
+            const codes = fromArray.length ? fromArray : fromCsv;
+            
+            if (codes.length) {
+              setSelectedAgencyCodes(codes);
+              setValue('agencyCodes', codes.join(', '), { shouldDirty: false });
+              setValue('otherBusinessUnits', codes, { shouldDirty: false });
+              setValue('addAccessType', 'agency', { shouldDirty: false });
             }
-          });
+
+            // Set role justification
+            setValue('roleJustification', roleData.role_justification || '', { shouldDirty: false });
+          }
         } catch (e) {
           console.error('Error loading copy-flow data:', e);
           toast.error('Error loading copied user data');
@@ -311,21 +423,20 @@ function HrPayrollRoleSelectionPage() {
       }
     } else {
       const stateRequestId = location.state?.requestId;
-      const effectiveId = stateRequestId || (idParam as string | undefined);
+      const effectiveId = stateRequestId || idParam;
       if (effectiveId) {
         setRequestId(effectiveId);
         fetchRequestDetails(effectiveId);
-        fetchExistingSelections(effectiveId);
       } else {
-        toast.error('Please complete the main form first before selecting HR/Payroll roles.');
+        toast.error('Please complete the main form first before selecting HR or Payroll roles.');
         navigate('/');
       }
     }
-  }, [location.state, navigate, setValue, idParam]);
+  }, [location.state, navigate, idParam, setValue]);
 
   // Try to restore saved form data after request details are loaded
   useEffect(() => {
-    if (!requestDetails) return;
+    if (!requestDetails || isEditingCopiedRoles) return;
 
     const storageKey = `hrPayrollRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
     const savedData = localStorage.getItem(storageKey);
@@ -361,7 +472,7 @@ function HrPayrollRoleSelectionPage() {
       console.log('📡 No saved data found, fetching existing selections from Supabase');
       fetchExistingSelections(requestId!);
     }
-  }, [requestDetails, setValue, requestId]);
+  }, [requestDetails, setValue, requestId, isEditingCopiedRoles]);
 
   // Load minimal request details, but do not auto-select agencies in the UI
   const fetchRequestDetails = async (id: string) => {
@@ -472,30 +583,45 @@ function HrPayrollRoleSelectionPage() {
       };
 
       Object.entries(mappings).forEach(([dbField, formField]) => {
-        if ((data as any)[dbField] !== undefined) {
-          setValue(formField, (data as any)[dbField], { shouldDirty: false });
+        if (roleData[dbField] !== undefined) {
+          setValue(formField, roleData[dbField], { shouldDirty: false });
         }
       });
 
-      // ADD: hydrate MultiSelect from DB (prefer array, fall back to CSV)
-      const fromArray = normalizeCodes((data as any).other_business_units);
-      const fromCsv   = normalizeCodes((data as any).agency_codes);
-      const codes     = fromArray.length ? fromArray : fromCsv;
+      // Handle agency codes if present
+      const fromArray = normalizeCodes(roleData.other_business_units);
+      const fromCsv = normalizeCodes(roleData.agency_codes);
+      const codes = fromArray.length ? fromArray : fromCsv;
       
       if (codes.length) {
         setSelectedAgencyCodes(codes);
         setValue('agencyCodes', codes.join(', '), { shouldDirty: false });
         setValue('otherBusinessUnits', codes, { shouldDirty: false });
-      
-        // If no stored type but we have codes, assume agency access
-        const storedType = (data as any).add_access_type as AccessType | undefined;
-        if (!storedType) setValue('addAccessType', 'agency', { shouldDirty: false });
+        setValue('addAccessType', 'agency', { shouldDirty: false });
       }
-            
-    } catch (e) {
-      console.error('Failed to fetch existing HR/Payroll role selections:', e);
+          }
+        } catch (e) {
+          console.error('Error loading copy-flow data:', e);
+          toast.error('Error loading copied user data');
+        }
+      } else {
+        // Missing copy flow data, clean up and redirect
+        localStorage.removeItem('editingCopiedRoles');
+        toast.error('Copy flow data is incomplete. Please try again.');
+        navigate('/');
+      }
+    } else {
+      const stateRequestId = location.state?.requestId;
+      const effectiveId = stateRequestId || idParam;
+      if (effectiveId) {
+        setRequestId(effectiveId);
+        fetchRequestDetails(effectiveId);
+      } else {
+        toast.error('Please complete the main form first before selecting HR or Payroll roles.');
+        navigate('/');
+      }
     }
-  }
+  }, [location.state, navigate, idParam, setValue]);
 
   const handleAgencyCodesChange = (codes: string[]) => {
     // visible read-only string for convenience
@@ -567,12 +693,6 @@ function HrPayrollRoleSelectionPage() {
   };
 
   const onSubmit = async (form: HrPayrollRoleSelection) => {
-    if (!requestId) {
-      toast.error('No request found. Please start from the main form.');
-      navigate('/');
-      return;
-    }
-
     // Re-check using the submitted form values to avoid false negatives
     const actuallyHasRoles = ROLE_FLAG_KEYS.some(key => !!(form as any)[key]);
     if (!actuallyHasRoles) {
@@ -582,34 +702,118 @@ function HrPayrollRoleSelectionPage() {
 
     setSaving(true);
     try {
-      const homeBU = (form.homeBusinessUnit || requestDetails?.agency_code || '000')
-        .padEnd(5, '0')
-        .substring(0, 5);
+      if (isEditingCopiedRoles) {
+        const pendingFormData = localStorage.getItem('pendingFormData');
+        if (!pendingFormData) throw new Error('No pending form data found');
 
-      const baseRow = {
-        request_id: requestId,
-        home_business_unit: [homeBU],
-        other_business_units: form.otherBusinessUnits?.length ? form.otherBusinessUnits : null,
-        role_justification: form.roleJustification?.trim() || null,
-      };
+        const d: CopyFlowForm = JSON.parse(pendingFormData);
+        const pocUser = localStorage.getItem('pocUserName');
 
-      const { error: upsertErr } = await supabase
-        .from('security_role_selections')
-        .upsert(baseRow, { onConflict: 'request_id' });
+        const requestPayload = {
+          start_date: d.startDate,
+          employee_name: d.employeeName,
+          employee_id: d.employeeId || null,
+          is_non_employee: !!d.isNonEmployee,
+          work_location: d.workLocation || null,
+          work_phone: d.workPhone ? d.workPhone.replace(/\D/g, '') : null,
+          email: d.email,
+          agency_name: d.agencyName,
+          agency_code: d.agencyCode,
+          justification: d.justification || null,
+          submitter_name: d.submitterName,
+          submitter_email: d.submitterEmail,
+          supervisor_name: d.supervisorName,
+          supervisor_email: d.supervisorUsername,
+          security_admin_name: d.securityAdminName,
+          security_admin_email: d.securityAdminUsername,
+          status: 'pending',
+          poc_user: pocUser,
+        };
 
-      if (upsertErr) throw upsertErr;
+        const { data: newReq, error: requestError } = await supabase
+          .from('security_role_requests')
+          .insert(requestPayload)
+          .select()
+          .single();
+        if (requestError) throw requestError;
 
-      await applyRoleFlags(requestId, form);
+        const { error: areasError } = await supabase.from('security_areas').insert({
+          request_id: newReq.id,
+          area_type: 'hr_payroll',
+          director_name: d.hrDirector || null,
+          director_email: d.hrDirectorEmail || null,
+        });
+        if (areasError) throw areasError;
 
-      // Save to localStorage for future visits
-      if (requestDetails) {
-        const storageKey = `hrPayrollRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
-        localStorage.setItem(storageKey, JSON.stringify(form));
-        console.log('💾 Saving HR/Payroll form data for future visits:', { storageKey, form });
+        const homeBU = (form.homeBusinessUnit || d.agencyCode || '000')
+          .padEnd(5, '0')
+          .substring(0, 5);
+
+        const baseRow = {
+          request_id: newReq.id,
+          home_business_unit: [homeBU],
+          other_business_units: form.otherBusinessUnits?.length ? form.otherBusinessUnits : null,
+          role_justification: form.roleJustification?.trim() || null,
+        };
+
+        const { error: upsertErr } = await supabase
+          .from('security_role_selections')
+          .upsert(baseRow, { onConflict: 'request_id' });
+
+        if (upsertErr) throw upsertErr;
+
+        await applyRoleFlags(newReq.id, form);
+
+        // Save to localStorage for future visits
+        if (requestDetails) {
+          const storageKey = `hrPayrollRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
+          localStorage.setItem(storageKey, JSON.stringify(form));
+          console.log('💾 Saving HR/Payroll form data for future visits:', { storageKey, form });
+        }
+
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('editingCopiedRoles');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
+
+        toast.success('HR/Payroll role selections saved successfully!');
+        navigate('/success', { state: { requestId: newReq.id } });
+      } else {
+        if (!requestId) {
+          toast.error('No request found. Please start from the main form.');
+          navigate('/');
+          return;
+        }
+
+        const homeBU = (form.homeBusinessUnit || requestDetails?.agency_code || '000')
+          .padEnd(5, '0')
+          .substring(0, 5);
+
+        const baseRow = {
+          request_id: requestId,
+          home_business_unit: [homeBU],
+          other_business_units: form.otherBusinessUnits?.length ? form.otherBusinessUnits : null,
+          role_justification: form.roleJustification?.trim() || null,
+        };
+
+        const { error: upsertErr } = await supabase
+          .from('security_role_selections')
+          .upsert(baseRow, { onConflict: 'request_id' });
+
+        if (upsertErr) throw upsertErr;
+
+        await applyRoleFlags(requestId, form);
+
+        // Save to localStorage for future visits
+        if (requestDetails) {
+          const storageKey = `hrPayrollRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
+          localStorage.setItem(storageKey, JSON.stringify(form));
+          console.log('💾 Saving HR/Payroll form data for future visits:', { storageKey, form });
+        }
+
+        toast.success('HR/Payroll role selections saved.');
+        navigate('/success', { state: { requestId } });
       }
-
-      toast.success('HR/Payroll role selections saved.');
-      navigate('/success', { state: { requestId } });
     } catch (err: any) {
       console.error('HR/Payroll save failed:', err);
       toast.error('Failed to save HR/Payroll role selections. Please try again.');
