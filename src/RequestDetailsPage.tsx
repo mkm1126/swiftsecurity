@@ -416,6 +416,32 @@ function RequestDetailsPage() {
     // Disable test mode when creating a new request
     localStorage.setItem('testMode', 'false');
     
+    // Comprehensive clearing of all form-related data
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (
+        key.startsWith('formData_') || 
+        key.startsWith('requestId_') ||
+        key.startsWith('testData_') ||
+        key.startsWith('selectRoles_') ||
+        key.startsWith('elmRoles_') ||
+        key.startsWith('epmDwhRoles_') ||
+        key.startsWith('hrPayrollRoles_') ||
+        key === 'pendingMainFormData' ||
+        key === 'pendingFormData' ||
+        key === 'copiedRoleSelections' ||
+        key === 'copiedUserDetails' ||
+        key === 'editingCopiedRoles'
+      )) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Clear session storage as well
+    sessionStorage.clear();
+    
     // Dispatch a storage event to notify other components
     window.dispatchEvent(new StorageEvent('storage', {
       key: 'testMode',
