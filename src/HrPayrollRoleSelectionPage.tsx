@@ -305,8 +305,47 @@ function HrPayrollRoleSelectionPage() {
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
 
       if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
-        setIsEditingCopiedRoles(true);
         try {
+          const formData = JSON.parse(pendingFormData);
+          const roleData = JSON.parse(copiedRoleSelections);
+          setRequestDetails({ 
+            employee_name: formData.employeeName, 
+            agency_name: formData.agencyName, 
+            agency_code: formData.agencyCode 
+          });
+          
+          // Map copied role data to form fields
+          if (roleData) {
+            Object.entries(roleData).forEach(([key, value]) => {
+              if (typeof value === 'boolean' && value === true) {
+                setValue(key as keyof HrPayrollRoleSelection, value as any, { shouldDirty: false });
+              } else if (typeof value === 'string' && value.trim()) {
+                setValue(key as keyof HrPayrollRoleSelection, value as any, { shouldDirty: false });
+              }
+            });
+          }
+        } catch (e) {
+          console.error('Error loading copy-flow data:', e);
+          toast.error('Error loading copied user data');
+        }
+      } else {
+        // Missing copy flow data, clean up and redirect
+        localStorage.removeItem('editingCopiedRoles');
+        toast.error('Copy flow data is incomplete. Please try again.');
+        navigate('/');
+      }
+    } else {
+      const stateRequestId = location.state?.requestId;
+      const effectiveId = stateRequestId || idParam;
+      if (effectiveId) {
+        setRequestId(effectiveId);
+        fetchRequestDetails(effectiveId);
+      } else {
+        toast.error('Please complete the main form first before selecting HR or Payroll roles.');
+        navigate('/');
+      }
+    }
+  }, [location.state, navigate, idParam, setValue]);
           const formData: CopyFlowForm = JSON.parse(pendingFormData);
           const roleData = JSON.parse(copiedRoleSelections);
           setRequestDetails({ 
