@@ -300,12 +300,12 @@ function HrPayrollRoleSelectionPage() {
     const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
 
     if (isCopyFlow) {
+      setIsEditingCopiedRoles(true);
       const pendingFormData = localStorage.getItem('pendingFormData');
       const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
 
       if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
-        setIsEditingCopiedRoles(true);
         try {
           const formData: CopyFlowForm = JSON.parse(pendingFormData);
           const roleData = JSON.parse(copiedRoleSelections);
@@ -1300,7 +1300,7 @@ function HrPayrollRoleSelectionPage() {
 
                             <div>
                               <h4 className="font-bold text-sm text-gray-900">Labor Distribution</h4>
-                              <div className="space-y-1 mt-1">
+                              <div className="flex space-x-4 mt-1">
                                 <label className="flex items-center">
                                   <input type="checkbox" {...register('laborDistributionUpdate')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                   <span className="ml-2 text-sm text-gray-700">Update</span>
@@ -1314,7 +1314,7 @@ function HrPayrollRoleSelectionPage() {
 
                             <div>
                               <h4 className="font-bold text-sm text-gray-900">Leave</h4>
-                              <div className="space-y-1 mt-1">
+                              <div className="flex space-x-4 mt-1">
                                 <label className="flex items-center">
                                   <input type="checkbox" {...register('leaveUpdate')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                   <span className="ml-2 text-sm text-gray-700">Update</span>
