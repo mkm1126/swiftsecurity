@@ -111,17 +111,17 @@ function UserSelect({
       agencyCode: userDetails.agency_code || '',
       justification: userDetails.justification || '',
 
-      // Submitter details (use current user from formData)
-      submitterName: formData.submitterName || '',
-      submitterEmail: formData.submitterEmail || '',
+      // Submitter details (use current user from formData, not copied user)
+      submitterName: formData?.submitterName || '',
+      submitterEmail: formData?.submitterEmail || '',
 
-      // Supervisor details (use current user from formData)
-      supervisorName: formData.supervisorName || '',
-      supervisorUsername: formData.supervisorUsername || '', // Note: maps to supervisor_email in DB
+      // Supervisor details (use current user from formData, not copied user)
+      supervisorName: formData?.supervisorName || '',
+      supervisorUsername: formData?.supervisorUsername || '', // Note: maps to supervisor_email in DB
 
-      // Security admin details (use current user from formData)
-      securityAdminName: formData.securityAdminName || '',
-      securityAdminUsername: formData.securityAdminUsername || '', // Note: maps to security_admin_email in DB
+      // Security admin details (use current user from formData, not copied user)
+      securityAdminName: formData?.securityAdminName || '',
+      securityAdminUsername: formData?.securityAdminUsername || '', // Note: maps to security_admin_email in DB
 
       // Area-specific director details (extract from security_areas if available)
       elmKeyAdmin: userDetails.security_areas?.find((area: any) => area.area_type === 'elm')?.director_name || '',
@@ -133,7 +133,7 @@ function UserSelect({
       accountingDirector: userDetails.security_areas?.find((area: any) => area.area_type === 'accounting_procurement')?.director_name || '',
       accountingDirectorUsername: userDetails.security_areas?.find((area: any) => area.area_type === 'accounting_procurement')?.director_email || '',
 
-      // HR-specific fields
+      // HR-specific fields (from copied user)
       hrMainframeLogonId: userDetails.hr_mainframe_logon_id || '',
       hrViewStatewide: userDetails.hr_view_statewide || false,
     };
