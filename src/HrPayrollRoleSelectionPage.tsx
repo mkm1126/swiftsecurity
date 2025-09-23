@@ -300,12 +300,12 @@ function HrPayrollRoleSelectionPage() {
     const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
 
     if (isCopyFlow) {
+      setIsEditingCopiedRoles(true);
       const pendingFormData = localStorage.getItem('pendingFormData');
       const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
 
       if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
-        setIsEditingCopiedRoles(true);
         try {
           const formData: CopyFlowForm = JSON.parse(pendingFormData);
           const roleData = JSON.parse(copiedRoleSelections);
@@ -421,16 +421,18 @@ function HrPayrollRoleSelectionPage() {
         toast.error('Copy flow data is incomplete. Please try again.');
         navigate('/');
       }
+      return;
+    }
+
+    // Normal flow - not copying roles
+    const stateRequestId = location.state?.requestId;
+    const effectiveId = stateRequestId || idParam;
+    if (effectiveId) {
+      setRequestId(effectiveId);
+      fetchRequestDetails(effectiveId);
     } else {
-      const stateRequestId = location.state?.requestId;
-      const effectiveId = stateRequestId || idParam;
-      if (effectiveId) {
-        setRequestId(effectiveId);
-        fetchRequestDetails(effectiveId);
-      } else {
-        toast.error('Please complete the main form first before selecting HR or Payroll roles.');
-        navigate('/');
-      }
+      toast.error('Please complete the main form first before selecting HR or Payroll roles.');
+      navigate('/');
     }
   }, [location.state, navigate, idParam, setValue]);
 
@@ -583,24 +585,28 @@ function HrPayrollRoleSelectionPage() {
       };
 
       Object.entries(mappings).forEach(([dbField, formField]) => {
-        if (data[dbField] !== undefined) {
-          setValue(formField, data[dbField], { shouldDirty: false });
+        if ((data as any)[dbField] !== undefined) {
+          setValue(formField, (data as any)[dbField], { shouldDirty: false });
         }
       });
 
-      // Handle agency codes if present
-      const fromArray = normalizeCodes(data.other_business_units);
-      const fromCsv = normalizeCodes(data.agency_codes);
-      const codes = fromArray.length ? fromArray : fromCsv;
+      // ADD: hydrate MultiSelect from DB (prefer array, fall back to CSV)
+      const fromArray = normalizeCodes((data as any).other_business_units);
+      const fromCsv   = normalizeCodes((data as any).agency_codes);
+      const codes     = fromArray.length ? fromArray : fromCsv;
       
       if (codes.length) {
         setSelectedAgencyCodes(codes);
         setValue('agencyCodes', codes.join(', '), { shouldDirty: false });
         setValue('otherBusinessUnits', codes, { shouldDirty: false });
-        setValue('addAccessType', 'agency', { shouldDirty: false });
+      
+        // If no stored type but we have codes, assume agency access
+        const storedType = (data as any).add_access_type as AccessType | undefined;
+        if (!storedType) setValue('addAccessType', 'agency', { shouldDirty: false });
       }
-    } catch (err) {
-      console.error('Error fetching existing selections:', err);
+            
+    } catch (e) {
+      console.error('Failed to fetch existing HR/Payroll role selections:', e);
     }
   }
 
@@ -1294,7 +1300,7 @@ function HrPayrollRoleSelectionPage() {
 
                             <div>
                               <h4 className="font-bold text-sm text-gray-900">Labor Distribution</h4>
-                              <div className="space-y-1 mt-1">
+                              <div className="flex space-x-4 mt-1">
                                 <label className="flex items-center">
                                   <input type="checkbox" {...register('laborDistributionUpdate')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                   <span className="ml-2 text-sm text-gray-700">Update</span>
@@ -1308,7 +1314,7 @@ function HrPayrollRoleSelectionPage() {
 
                             <div>
                               <h4 className="font-bold text-sm text-gray-900">Leave</h4>
-                              <div className="space-y-1 mt-1">
+                              <div className="flex space-x-4 mt-1">
                                 <label className="flex items-center">
                                   <input type="checkbox" {...register('leaveUpdate')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                   <span className="ml-2 text-sm text-gray-700">Update</span>
