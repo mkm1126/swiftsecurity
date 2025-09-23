@@ -107,9 +107,7 @@ function Header({ title, subtitle, onUserChange }: HeaderProps) {
         key === 'pendingFormData' ||
         key === 'copiedRoleSelections' ||
         key === 'copiedUserDetails' ||
-        key === 'editingCopiedRoles' ||
-        key.includes('_Administration') || // Clear any auto-saved form data
-        key.includes('_Test_User_') // Clear test user data
+        key === 'editingCopiedRoles'
       )) {
         keysToRemove.push(key);
       }
