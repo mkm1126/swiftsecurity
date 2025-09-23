@@ -583,30 +583,30 @@ function HrPayrollRoleSelectionPage() {
       };
 
       Object.entries(mappings).forEach(([dbField, formField]) => {
-        if (roleData[dbField] !== undefined) {
-          setValue(formField, roleData[dbField], { shouldDirty: false });
+        if ((data as any)[dbField] !== undefined) {
+          setValue(formField, (data as any)[dbField], { shouldDirty: false });
         }
       });
 
-      // Handle agency codes if present
-      const fromArray = normalizeCodes(roleData.other_business_units);
-      const fromCsv = normalizeCodes(roleData.agency_codes);
-      const codes = fromArray.length ? fromArray : fromCsv;
+      // ADD: hydrate MultiSelect from DB (prefer array, fall back to CSV)
+      const fromArray = normalizeCodes((data as any).other_business_units);
+      const fromCsv   = normalizeCodes((data as any).agency_codes);
+      const codes     = fromArray.length ? fromArray : fromCsv;
       
       if (codes.length) {
         setSelectedAgencyCodes(codes);
         setValue('agencyCodes', codes.join(', '), { shouldDirty: false });
         setValue('otherBusinessUnits', codes, { shouldDirty: false });
-        setValue('addAccessType', 'agency', { shouldDirty: false });
+      
+        // If no stored type but we have codes, assume agency access
+        const storedType = (data as any).add_access_type as AccessType | undefined;
+        if (!storedType) setValue('addAccessType', 'agency', { shouldDirty: false });
       }
-          }
-        } catch (e) {
-          console.error('Error loading copy-flow data:', e);
-          toast.error('Error loading copied user data');
-        }
-      } else {
-        // Missing copy flow data, clean up and redirect
-        localStorage.removeItem('editingCopiedRoles');
+            
+    } catch (e) {
+      console.error('Failed to fetch existing HR/Payroll role selections:', e);
+    }
+  }
         toast.error('Copy flow data is incomplete. Please try again.');
         navigate('/');
       }
