@@ -854,23 +854,58 @@ function SelectRolesPage() {
         if (!pendingFormData) throw new Error('No pending form data found');
 
         const d: CopyFlowForm = JSON.parse(pendingFormData);
+        
+        // Debug: Check what data we have
+        console.log('🔧 Copy flow - pendingFormData:', d);
+        
+        // Ensure all required fields have values
+        const requiredFields = {
+          startDate: d.startDate || new Date().toISOString().split('T')[0],
+          employeeName: d.employeeName || '',
+          email: d.email || d.employeeEmail || '',
+          agencyName: d.agencyName || '',
+          agencyCode: d.agencyCode || '',
+          submitterName: d.submitterName || 'Copy Flow User',
+          submitterEmail: d.submitterEmail || d.email || 'copyflow@example.com',
+          supervisorName: d.supervisorName || 'Copy Flow Supervisor',
+          supervisorEmail: d.supervisorUsername || d.supervisorEmail || 'supervisor@example.com',
+          securityAdminName: d.securityAdminName || 'Copy Flow Security Admin',
+          securityAdminEmail: d.securityAdminUsername || d.securityAdminEmail || 'security@example.com'
+        };
+        
+        console.log('🔧 Copy flow - using required fields:', requiredFields);
         const pocUser = localStorage.getItem('pocUserName');
 
         // Ensure start_date is properly set - this is critical for the database constraint
         const startDate = d.startDate || new Date().toISOString().split('T')[0];
         
-        console.log('🔧 Copy flow - pendingFormData:', d);
-        console.log('🔧 Copy flow - roleData:', roleData);
-           
         console.log('🔧 Copy flow - creating request with data:', {
           startDate,
           employeeName: d.employeeName,
-          submitterName: requiredFields.submitter_name,
-          submitterEmail: requiredFields.submitter_email,
-          email: requiredFields.email,
+          submitterName: d.submitterName,
           hasStartDate: !!startDate
         });
-        const requestPayload = requiredFields;
+        const requestPayload = {
+          start_date: requiredFields.startDate,
+          employee_name: requiredFields.employeeName,
+          employee_id: d.employeeId || null,
+          is_non_employee: !!d.isNonEmployee,
+          work_location: d.workLocation || null,
+          work_phone: d.workPhone ? d.workPhone.replace(/\D/g, '') : null,
+          email: requiredFields.email,
+          agency_name: requiredFields.agencyName,
+          agency_code: requiredFields.agencyCode,
+          justification: d.justification || null,
+          submitter_name: requiredFields.submitterName,
+          submitter_email: requiredFields.submitterEmail,
+          supervisor_name: requiredFields.supervisorName,
+          supervisor_email: requiredFields.supervisorEmail,
+          security_admin_name: requiredFields.securityAdminName,
+          security_admin_email: requiredFields.securityAdminEmail,
+          status: 'pending',
+          poc_user: pocUser,
+        };
+
         const { data: newRequest, error: requestError } = await supabase
           .from('security_role_requests')
           .insert(requestPayload)
