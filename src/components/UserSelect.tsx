@@ -100,7 +100,7 @@ function UserSelect({
     // Complete form data for the copy flow - include ALL required fields
     const completeFormData = {
       // Employee details
-      startDate: userDetails.start_date || new Date().toISOString().split('T')[0], // Use existing or today's date
+      startDate: formData?.startDate || userDetails.start_date || new Date().toISOString().split('T')[0], // Use current form, existing, or today's date
       employeeName: userDetails.employee_name || '',
       employeeId: userDetails.employee_id || '',
       isNonEmployee: userDetails.is_non_employee || false,
