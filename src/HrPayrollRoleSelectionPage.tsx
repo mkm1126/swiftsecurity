@@ -622,6 +622,7 @@ function HrPayrollRoleSelectionPage() {
       }
     }
   }, [location.state, navigate, idParam, setValue]);
+  }
 
   const handleAgencyCodesChange = (codes: string[]) => {
     // visible read-only string for convenience
