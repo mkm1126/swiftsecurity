@@ -859,33 +859,19 @@ function SelectRolesPage() {
         // Ensure start_date is properly set - this is critical for the database constraint
         const startDate = d.startDate || new Date().toISOString().split('T')[0];
         
+           console.log('🔧 Copy flow - pendingFormData:', d);
+           console.log('🔧 Copy flow - roleData:', roleData);
+           
         console.log('🔧 Copy flow - creating request with data:', {
           startDate,
           employeeName: d.employeeName,
-          submitterName: d.submitterName,
+         submitterName: requiredFields.submitter_name,
+         submitterEmail: requiredFields.submitter_email,
+         email: requiredFields.email,
           hasStartDate: !!startDate
         });
         const requestPayload = {
-          start_date: startDate,
-          employee_name: d.employeeName,
-          employee_id: d.employeeId || null,
-          is_non_employee: !!d.isNonEmployee,
-          work_location: d.workLocation || null,
-          work_phone: d.workPhone ? d.workPhone.replace(/\D/g, '') : null,
-          email: d.email,
-          agency_name: d.agencyName,
-          agency_code: d.agencyCode,
-          justification: d.justification || null,
-          submitter_name: d.submitterName,
-          submitter_email: d.submitterEmail,
-          supervisor_name: d.supervisorName,
-          supervisor_email: d.supervisorUsername,
-          security_admin_name: d.securityAdminName,
-          security_admin_email: d.securityAdminUsername,
-          status: 'pending',
-          poc_user: pocUser,
-        };
-
+       const requestPayload = requiredFields;
         const { data: newRequest, error: requestError } = await supabase
           .from('security_role_requests')
           .insert(requestPayload)
