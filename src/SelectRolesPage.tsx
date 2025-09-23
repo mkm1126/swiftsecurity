@@ -870,8 +870,7 @@ function SelectRolesPage() {
          email: requiredFields.email,
           hasStartDate: !!startDate
         });
-        const requestPayload = {
-       const requestPayload = requiredFields;
+        const requestPayload = requiredFields;
         const { data: newRequest, error: requestError } = await supabase
           .from('security_role_requests')
           .insert(requestPayload)
