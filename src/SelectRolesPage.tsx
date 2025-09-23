@@ -598,7 +598,7 @@ function SelectRolesPage() {
   };
 
   // Fetch existing saved selections and hydrate the form (for Edit flow)
-  const fetchExistingSelections = async (id: string) => {
+  const fetchExistingSelections = async (id: string): Promise<boolean> => {
     try {
       // Renamed to be more specific about what it does
       const { data, error } = await supabase
@@ -664,9 +664,12 @@ function SelectRolesPage() {
           console.log('🔁 Synced form state to UI with reset() after DB hydrate:', snap);
           console.log('📡 Loaded selections from database:', data);
         }, 0);
+        return true;
       }
+      return false;
     } catch (err) {
       console.error('Failed to fetch existing role selections from database:', err);
+      return false;
     }
   };
 
@@ -815,12 +818,14 @@ function SelectRolesPage() {
       // 1) Load header details and capture them immediately
       const details = await fetchRequestDetails(effectiveId);
 
-      // 2) Try restoring from a stable, person+agency local draft USING those details (only if not in copy flow)
-      const restoredStable = !isCopyFlow && restoreFromStableDraftFor(details);
-
-      // 3) If nothing to restore locally, hydrate from DB (only if not in copy flow)
-      if (!restoredStable && !isCopyFlow) {
-        await fetchExistingSelections(effectiveId);
+      // 2) For edit flows: hydrate from DB first, then optionally apply stable restore
+      let restoredStable = false;
+      let hadDbSelections = false;
+      if (!isCopyFlow) {
+        hadDbSelections = await fetchExistingSelections(effectiveId);
+        if (hadDbSelections) {
+          restoredStable = restoreFromStableDraftFor(details);
+        }
       }
 
       // 4) Always overlay any legacy id-scoped local draft for backwards compatibility (only if not in copy flow)
