@@ -856,8 +856,17 @@ function SelectRolesPage() {
         const d: CopyFlowForm = JSON.parse(pendingFormData);
         const pocUser = localStorage.getItem('pocUserName');
 
+        // Ensure start_date is properly set - this is critical for the database constraint
+        const startDate = d.startDate || new Date().toISOString().split('T')[0];
+        
+        console.log('🔧 Copy flow - creating request with data:', {
+          startDate,
+          employeeName: d.employeeName,
+          submitterName: d.submitterName,
+          hasStartDate: !!startDate
+        });
         const requestPayload = {
-          start_date: d.startDate,
+          start_date: startDate,
           employee_name: d.employeeName,
           employee_id: d.employeeId || null,
           is_non_employee: !!d.isNonEmployee,
