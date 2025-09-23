@@ -5,137 +5,17 @@ import { ArrowLeft, Save, AlertTriangle, Users, Copy } from 'lucide-react';
 import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { toast } from 'sonner';
+import { SecurityRoleSelection } from './types';
 import Header from './components/Header';
 import MultiSelect from './components/MultiSelect';
 import UserSelect from './components/UserSelect';
 import { businessUnits } from './lib/businessUnitData';
-import { accountingProcurementRoles } from './lib/accountingProcurementRoleDefinitions';
 
-interface SecurityRoleSelection {
-  homeBusinessUnit: string | string[];
-  otherBusinessUnits?: string;
-
-  // Accounts Payable
-  voucherEntry: boolean;
-  voucherApprover1?: string;
-  voucherApprover2?: string;
-  voucherApprover3?: string;
-  maintenanceVoucherBuildErrors: boolean;
-  matchOverride: boolean;
-  apInquiryOnly: boolean;
-  apWorkflowApprover?: boolean;
-  apWorkflowRouteControls?: string;
-
-  // Accounts Receivable and Cash Management
-  cashMaintenance: boolean;
-  receivableSpecialist: boolean;
-  receivableSupervisor: boolean;
-  writeoffApprovalBusinessUnits?: string;
-  billingCreate: boolean;
-  billingSpecialist: boolean;
-  billingSupervisor: boolean;
-  creditInvoiceApprovalBusinessUnits?: string;
-  customerMaintenanceSpecialist: boolean;
-  arBillingSetup: boolean;
-  arBillingInquiryOnly: boolean;
-  cashManagementInquiryOnly: boolean;
-
-  // Budgets/Commitment Control & Appropriation Maintenance
-  budgetJournalEntryOnline: boolean;
-  budgetJournalLoad: boolean;
-  journalApprover: boolean;
-  appropriationSources?: string;
-  expenseBudgetSource?: string;
-  revenueBudgetSource?: string;
-  budgetTransferEntryOnline: boolean;
-  transferApprover: boolean;
-  transferAppropriationSources?: string;
-  budgetInquiryOnly: boolean;
-
-  // General Ledger and NVISION Reporting
-  journalEntryOnline: boolean;
-  journalLoad: boolean;
-  agencyChartfieldMaintenance: boolean;
-  glAgencyApprover: boolean;
-  glAgencyApproverSources?: string;
-  generalLedgerInquiryOnly: boolean;
-  nvisionReportingAgencyUser: boolean;
-  needsDailyReceiptsReport?: boolean;
-
-  // Grants
-  awardDataEntry: boolean;
-  grantFiscalManager: boolean;
-  programManager: boolean;
-  gmAgencySetup: boolean;
-  grantsInquiryOnly: boolean;
-
-  // Project Costing
-  federalProjectInitiator: boolean;
-  oimInitiator: boolean;
-  projectInitiator: boolean;
-  projectManager: boolean;
-  capitalProgramsOffice: boolean;
-  projectCostAccountant: boolean;
-  projectFixedAsset: boolean;
-  categorySubcategoryManager: boolean;
-  projectControlDates: boolean;
-  projectAccountingSystems: boolean;
-  mndotProjectsInquiry: boolean;
-  projectsInquiryOnly: boolean;
-  mndotProjectApprover: boolean;
-  routeControl?: string;
-
-  // Cost Allocation
-  costAllocationInquiryOnly: boolean;
-
-  // Asset Management
-  financialAccountantAssets: boolean;
-  assetManagementInquiryOnly: boolean;
-  physicalInventoryApproval1: boolean;
-  physicalInventoryBusinessUnits?: string;
-  physicalInventoryApproval2: boolean;
-  physicalInventoryDepartmentIds?: string;
-
-  // Inventory (IN)
-  inventoryExpressIssue: boolean;
-  inventoryAdjustmentApprover: boolean;
-  inventoryReplenishmentBuyer: boolean;
-  inventoryControlWorker: boolean;
-  inventoryExpressPutaway: boolean;
-  inventoryFulfillmentSpecialist: boolean;
-  inventoryPoReceiver: boolean;
-  inventoryReturnsReceiver: boolean;
-  inventoryCostAdjustment: boolean;
-  inventoryMaterialsManager: boolean;
-  inventoryDelivery: boolean;
-  inventoryInquiryOnly: boolean;
-  inventoryConfigurationAgency: boolean;
-  inventoryPickPlanReportDistribution: boolean;
-  shipToLocation?: string;
-  inventoryBusinessUnits?: string;
-
-  // PO Approver fields
-  poApprover: boolean;
-  poApprover2: boolean;
-  poApprover3: boolean;
-  poApproverLimit1?: string;
-  poApproverLimit2?: string;
-  poApproverLimit3?: string;
-  poApproverRouteControls?: string;
-
-  // AP fields
-  apVoucherApprover1: boolean;
-  apVoucherApprover2: boolean;
-  apVoucherApprover3: boolean;
-  apVoucherApprover1RouteControls?: string;
-  apVoucherApprover2RouteControls?: string;
-  apVoucherApprover3RouteControls?: string;
-
-  // Approval acknowledgment
-  supervisorApproval: boolean;
-
-  // Role justification
-  roleJustification?: string;
+interface User {
+  employee_name: string;
+  employee_id: string;
+  email: string;
+  request_id?: string;
 }
 
 type CopyFlowForm = {
@@ -158,13 +38,6 @@ type CopyFlowForm = {
   accountingDirector?: string;
   accountingDirectorUsername?: string;
 };
-
-interface User {
-  employee_name: string;
-  employee_id: string;
-  email: string;
-  request_id?: string;
-}
 
 // Group roles by category for better organization
 const rolesByCategory = accountingProcurementRoles.reduce((acc, role) => {
@@ -200,10 +73,14 @@ function SelectRolesPage() {
 
   const [saving, setSaving] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
-  const [requestDetails, setRequestDetails] = useState<{ employee_name?: string; agency_name?: string; agency_code?: string } | null>(null);
+  const [requestDetails, setRequestDetails] = useState<any>(null);
+  const [loadingExistingData, setLoadingExistingData] = useState(false);
+  const [availableBusinessUnits, setAvailableBusinessUnits] = useState<any[]>([]);
+  const [hasExistingDbSelections, setHasExistingDbSelections] = useState(false);
+  const [restoredFromLocalStorage, setRestoredFromLocalStorage] = useState(false);
   const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [availableBusinessUnits, setAvailableBusinessUnits] = useState<Array<{ business_unit_code: string; business_unit_name: string }>>([]);
+  const homeBusinessUnitRef = useRef<HTMLDivElement | null>(null);
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<SecurityRoleSelection>({
     defaultValues: {
@@ -293,85 +170,107 @@ function SelectRolesPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
+  // --- mount flow -----------------------------------------------------------
+  
+  // On mount: prefer URL param for a stable ID; load DB first, then overlay local draft.
   useEffect(() => {
-    const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
+    (async () => {
+      const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
 
-    if (isCopyFlow) {
-      const pendingFormData = localStorage.getItem('pendingFormData');
-      const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
-      const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+      if (isCopyFlow) {
+        const pendingFormData = localStorage.getItem('pendingFormData');
+        const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+        const copiedUserDetails = localStorage.getItem('copiedUserDetails');
 
-      if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
-        setIsEditingCopiedRoles(true);
-        try {
-          const formData: CopyFlowForm = JSON.parse(pendingFormData);
-          const roleData = JSON.parse(copiedRoleSelections);
-          setRequestDetails({ employee_name: formData.employeeName, agency_name: formData.agencyName, agency_code: formData.agencyCode });
-          
-          // Map copied role data to form fields
-          if (roleData) {
-            Object.entries(roleData).forEach(([key, value]) => {
-              if (typeof value === 'boolean' && value === true) {
-                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-              } else if (typeof value === 'string' && value.trim()) {
-                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-              }
+        if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
+          setIsEditingCopiedRoles(true);
+          try {
+            const formData: CopyFlowForm = JSON.parse(pendingFormData);
+            const roleData = JSON.parse(copiedRoleSelections);
+            setRequestDetails({ 
+              employee_name: formData.employeeName, 
+              agency_name: formData.agencyName, 
+              agency_code: formData.agencyCode 
             });
+            
+            // Map copied role data to form fields
+            if (roleData) {
+              Object.entries(roleData).forEach(([key, value]) => {
+                if (typeof value === 'boolean' && value === true) {
+                  setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+                } else if (typeof value === 'string' && value.trim()) {
+                  setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+                }
+              });
+            }
+            
+            // Mark hydration as complete
+            setTimeout(() => {
+              isHydratingRef.current = false;
+            }, 0);
+            return;
+          } catch (e) {
+            console.error('Error loading copy-flow data:', e);
+            toast.error('Error loading copied user data');
           }
-        } catch (e) {
-          console.error('Error loading copy-flow data:', e);
-          toast.error('Error loading copied user data');
+        } else {
+          localStorage.removeItem('editingCopiedRoles');
+          toast.error('Copy flow data is incomplete. Please try again.');
+          navigate('/');
+          return;
         }
-      } else {
-        localStorage.removeItem('editingCopiedRoles');
-        toast.error('Copy flow data is incomplete. Please try again.');
-        navigate('/');
       }
-    } else {
-      const stateRequestId = location.state?.requestId;
-      const effectiveId = stateRequestId || idParam;
-      
+
+      const stateRequestId = (location as any)?.state?.requestId;
+      const effectiveId = stateRequestId || (idParam as string | null);
+
       if (!effectiveId) {
         toast.error('Please complete the main form first before selecting roles.');
         navigate('/');
         return;
       }
-      
+
       setRequestId(effectiveId);
-      fetchRequestDetails(effectiveId);
-    }
-  }, [location.state, navigate, idParam, setValue]);
+      await fetchRequestDetails(effectiveId);
+      await fetchBusinessUnits();
 
-  // Try to restore saved form data after request details are loaded
-  useEffect(() => {
-    if (!requestDetails) return;
-
-    const storageKey = `selectRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
-    const savedData = localStorage.getItem(storageKey);
-    
-    console.log('🔍 Checking for saved Select Roles form data:', { storageKey, hasSavedData: !!savedData });
-
-    if (savedData) {
-      try {
-        const parsedData = JSON.parse(savedData);
-        console.log('📥 Restoring saved Select Roles form data:', parsedData);
+      // Load existing DB data first
+      setLoadingExistingData(true);
+      const existingData = await fetchExistingSelections(effectiveId);
+      if (existingData) {
+        setHasExistingDbSelections(true);
+        console.log('📋 Existing selections fetched from Supabase:', existingData);
         
-        Object.entries(parsedData).forEach(([key, value]) => {
+        // Map database fields to form fields
+        Object.entries(existingData).forEach(([key, value]) => {
+          if (typeof value === 'boolean') {
+            setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+          } else if (typeof value === 'string' && value.trim()) {
+            setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+          }
+        });
+      }
+      setLoadingExistingData(false);
+
+      // Then overlay local draft if it exists
+      const localData = getLocalDraft(effectiveId);
+      if (localData) {
+        setRestoredFromLocalStorage(true);
+        console.log('📥 Restoring saved Select Roles form data:', localData);
+        
+        Object.entries(localData).forEach(([key, value]) => {
           setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
         });
         
         toast.success('Previous selections restored');
-      } catch (e) {
-        console.error('Error parsing saved data:', e);
-        localStorage.removeItem(storageKey);
       }
-    } else {
-      console.log('📡 No saved data found, fetching existing selections from Supabase');
-      if (requestId) {
-        fetchExistingSelections(requestId);
-      }
-    }
-  }, [requestDetails, setValue, requestId]);
+
+      // Mark hydration as complete
+      setTimeout(() => {
+        isHydratingRef.current = false;
+      }, 0);
+    })();
+  }, [location.state, navigate, idParam, setValue]);
 
   useEffect(() => {
     fetchBusinessUnits();
@@ -438,12 +337,29 @@ function SelectRolesPage() {
   }
 
   const onSubmit = async (data: SecurityRoleSelection) => {
-    if (!hasSelectedRoles) {
+    // Require at least one BU
+    const homeVal: any = (data as any).homeBusinessUnit;
+    if (!homeVal || (Array.isArray(homeVal) && homeVal.length === 0)) {
+      setError('homeBusinessUnit' as any, {
+        type: 'manual',
+        message: 'Home Business Unit is required. Please select at least one business unit.',
+      });
+      toast.error('Please select at least one Home Business Unit.');
+      homeBusinessUnitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // Require at least one role selected
+    const anyRole = Object.entries((data as any) || {}).some(
+      ([, value]) => typeof value === 'boolean' && value === true
+    );
+    if (!anyRole) {
       toast.error('Please select at least one role.');
       return;
     }
 
     setSaving(true);
+
     try {
       if (isEditingCopiedRoles) {
         const pendingFormData = localStorage.getItem('pendingFormData');
@@ -492,10 +408,16 @@ function SelectRolesPage() {
 
         if (areasError) throw areasError;
 
-        const selections = buildSelections(newRequest.id, d.agencyCode, data);
+        const rawPayload = buildRoleSelectionData(newRequest.id, data, {
+          homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
+        });
+
+        const cleaned = coerceBooleansDeep(rawPayload);
+        const normalized = normalizeRoleFlagsTrueOnly(cleaned);
+
         const { error: selectionsError } = await supabase
           .from('security_role_selections')
-          .insert(selections);
+          .insert(normalized);
 
         if (selectionsError) throw selectionsError;
 
@@ -513,175 +435,49 @@ function SelectRolesPage() {
           return;
         }
 
-        const selections = buildSelections(requestId, requestDetails?.agency_code, data);
+        // Build payload with arrays parsed for TEXT[] columns
+        const rawPayload = buildRoleSelectionData(requestId, data, {
+          homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
+        });
+
+        // Coerce any sneaky "on"/["on","on"] values → booleans
+        const cleaned = coerceBooleansDeep(rawPayload);
+        const normalized = normalizeRoleFlagsTrueOnly(cleaned);
+
         const { error } = await supabase
           .from('security_role_selections')
-          .upsert(selections, { onConflict: 'request_id' });
+          .upsert(normalized, { onConflict: 'request_id' });
 
         if (error) throw error;
 
-        // Save to localStorage for future visits
-        if (requestDetails) {
-          const storageKey = `selectRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
-          localStorage.setItem(storageKey, JSON.stringify(data));
-          console.log('💾 Saving Select Roles form data for future visits:', { storageKey, data });
-        }
+        // ✅ Clear local draft on successful save
+        try {
+          localStorage.removeItem(draftKey(requestId));
+        } catch {}
 
         toast.success('Role selections saved successfully!');
         navigate('/success', { state: { requestId } });
       }
-    } catch (err: any) {
-      console.error('Error saving copy flow role selections:', err);
-      toast.error('Failed to save role selections. Please try again.');
+    } catch (error: any) {
+      console.error('Error saving role selections:', error);
+      const errorMessage = error?.message || 'Unknown error occurred';
+      toast.error(`Failed to save role selections: ${errorMessage}`);
     } finally {
       setSaving(false);
     }
   };
 
-  function buildSelections(requestId: string, agencyCode: string | undefined, formData: SecurityRoleSelection) {
-    const homeBusinessUnit = Array.isArray(formData.homeBusinessUnit) 
-      ? formData.homeBusinessUnit 
-      : formData.homeBusinessUnit 
-        ? [formData.homeBusinessUnit] 
-        : [(agencyCode?.padEnd(5, '0') || '00000').substring(0, 5)];
+  const handleUserChange = (user: User | null) => {
+    setSelectedUser(user);
+  };
 
-    return {
-      request_id: requestId,
-      home_business_unit: homeBusinessUnit,
-      other_business_units: formData.otherBusinessUnits || null,
-      
-      // Accounts Payable
-      voucher_entry: formData.voucherEntry,
-      voucher_approver_1: formData.voucherApprover1 ? [formData.voucherApprover1] : null,
-      voucher_approver_2: formData.voucherApprover2 ? [formData.voucherApprover2] : null,
-      voucher_approver_3: formData.voucherApprover3 ? [formData.voucherApprover3] : null,
-      maintenance_voucher_build_errors: formData.maintenanceVoucherBuildErrors,
-      match_override: formData.matchOverride,
-      ap_inquiry_only: formData.apInquiryOnly,
-      ap_workflow_approver: formData.apWorkflowApprover || false,
-      ap_workflow_route_controls: formData.apWorkflowRouteControls || null,
-
-      // Accounts Receivable and Cash Management
-      cash_maintenance: formData.cashMaintenance,
-      receivable_specialist: formData.receivableSpecialist,
-      receivable_supervisor: formData.receivableSupervisor,
-      writeoff_approval_business_units: formData.writeoffApprovalBusinessUnits || null,
-      billing_create: formData.billingCreate,
-      billing_specialist: formData.billingSpecialist,
-      billing_supervisor: formData.billingSupervisor,
-      credit_invoice_approval_business_units: formData.creditInvoiceApprovalBusinessUnits || null,
-      customer_maintenance_specialist: formData.customerMaintenanceSpecialist,
-      ar_billing_setup: formData.arBillingSetup,
-      ar_billing_inquiry_only: formData.arBillingInquiryOnly,
-      cash_management_inquiry_only: formData.cashManagementInquiryOnly,
-
-      // Budgets/Commitment Control & Appropriation Maintenance
-      budget_journal_entry_online: formData.budgetJournalEntryOnline,
-      budget_journal_load: formData.budgetJournalLoad,
-      journal_approver: formData.journalApprover,
-      appropriation_sources: formData.appropriationSources || null,
-      expense_budget_source: formData.expenseBudgetSource || null,
-      revenue_budget_source: formData.revenueBudgetSource || null,
-      budget_transfer_entry_online: formData.budgetTransferEntryOnline,
-      transfer_approver: formData.transferApprover,
-      transfer_appropriation_sources: formData.transferAppropriationSources || null,
-      budget_inquiry_only: formData.budgetInquiryOnly,
-
-      // General Ledger and NVISION Reporting
-      journal_entry_online: formData.journalEntryOnline,
-      journal_load: formData.journalLoad,
-      agency_chartfield_maintenance: formData.agencyChartfieldMaintenance,
-      gl_agency_approver: formData.glAgencyApprover,
-      gl_agency_approver_sources: formData.glAgencyApproverSources || null,
-      general_ledger_inquiry_only: formData.generalLedgerInquiryOnly,
-      nvision_reporting_agency_user: formData.nvisionReportingAgencyUser,
-      needs_daily_receipts_report: formData.needsDailyReceiptsReport || false,
-
-      // Grants
-      award_data_entry: formData.awardDataEntry,
-      grant_fiscal_manager: formData.grantFiscalManager,
-      program_manager: formData.programManager,
-      gm_agency_setup: formData.gmAgencySetup,
-      grants_inquiry_only: formData.grantsInquiryOnly,
-
-      // Project Costing
-      federal_project_initiator: formData.federalProjectInitiator,
-      oim_initiator: formData.oimInitiator,
-      project_initiator: formData.projectInitiator,
-      project_manager: formData.projectManager,
-      capital_programs_office: formData.capitalProgramsOffice,
-      project_cost_accountant: formData.projectCostAccountant,
-      project_fixed_asset: formData.projectFixedAsset,
-      category_subcategory_manager: formData.categorySubcategoryManager,
-      project_control_dates: formData.projectControlDates,
-      project_accounting_systems: formData.projectAccountingSystems,
-      mndot_projects_inquiry: formData.mndotProjectsInquiry,
-      projects_inquiry_only: formData.projectsInquiryOnly,
-      mndot_project_approver: formData.mndotProjectApprover,
-      route_control: formData.routeControl || null,
-
-      // Cost Allocation
-      cost_allocation_inquiry_only: formData.costAllocationInquiryOnly,
-
-      // Asset Management
-      financial_accountant_assets: formData.financialAccountantAssets,
-      asset_management_inquiry_only: formData.assetManagementInquiryOnly,
-      physical_inventory_approval_1: formData.physicalInventoryApproval1,
-      physical_inventory_business_units: formData.physicalInventoryBusinessUnits || null,
-      physical_inventory_approval_2: formData.physicalInventoryApproval2,
-      physical_inventory_department_ids: formData.physicalInventoryDepartmentIds || null,
-
-      // Inventory
-      inventory_express_issue: formData.inventoryExpressIssue,
-      inventory_adjustment_approver: formData.inventoryAdjustmentApprover,
-      inventory_replenishment_buyer: formData.inventoryReplenishmentBuyer,
-      inventory_control_worker: formData.inventoryControlWorker,
-      inventory_express_putaway: formData.inventoryExpressPutaway,
-      inventory_fulfillment_specialist: formData.inventoryFulfillmentSpecialist,
-      inventory_po_receiver: formData.inventoryPoReceiver,
-      inventory_returns_receiver: formData.inventoryReturnsReceiver,
-      inventory_cost_adjustment: formData.inventoryCostAdjustment,
-      inventory_materials_manager: formData.inventoryMaterialsManager,
-      inventory_delivery: formData.inventoryDelivery,
-      inventory_inquiry_only: formData.inventoryInquiryOnly,
-      inventory_configuration_agency: formData.inventoryConfigurationAgency,
-      inventory_pick_plan_report_distribution: formData.inventoryPickPlanReportDistribution,
-      ship_to_location: formData.shipToLocation || null,
-      inventory_business_units: formData.inventoryBusinessUnits || null,
-
-      // PO Approver fields
-      po_approver: formData.poApprover,
-      po_approver_2: formData.poApprover2,
-      po_approver_3: formData.poApprover3,
-      po_approver_limit_1: formData.poApproverLimit1 || null,
-      po_approver_limit_2: formData.poApproverLimit2 || null,
-      po_approver_limit_3: formData.poApproverLimit3 || null,
-      po_approver_route_controls: formData.poApproverRouteControls || null,
-
-      // AP fields
-      ap_voucher_approver_1: formData.apVoucherApprover1,
-      ap_voucher_approver_2: formData.apVoucherApprover2,
-      ap_voucher_approver_3: formData.apVoucherApprover3,
-      ap_voucher_approver_1_route_controls: formData.apVoucherApprover1RouteControls || null,
-      ap_voucher_approver_2_route_controls: formData.apVoucherApprover2RouteControls || null,
-      ap_voucher_approver_3_route_controls: formData.apVoucherApprover3RouteControls || null,
-
-      // Approval acknowledgment
-      supervisor_approval: formData.supervisorApproval,
-
-      // Role justification
-      role_justification: formData.roleJustification || null,
-    };
-  }
+  const ssTemplateRows = ['Business unit template', 'Department template', 'Personal template'];
+  const ssActions = ['Create', 'Update', 'Delete'];
 
   const businessUnitOptions = availableBusinessUnits.map(unit => ({
     value: unit.business_unit_code,
     label: `${unit.business_unit_name} (${unit.business_unit_code})`
   }));
-
-  const handleUserChange = (user: User | null) => {
-    setSelectedUser(user);
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -751,7 +547,7 @@ function SelectRolesPage() {
                 </div>
               </div>
 
-              {/* Business Unit Selection */}
+              {/* Business Unit Information */}
               <div className="space-y-6">
                 <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Business Unit Information</h3>
                 
