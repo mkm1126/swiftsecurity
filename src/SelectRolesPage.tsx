@@ -698,8 +698,10 @@ function SelectRolesPage() {
     return () => window.removeEventListener('pagehide', saveOnHide);
   }, [requestId, getValues]);
 
+  // Auto-save to stable localStorage (only when not hydrating and not in copy flow)
   useEffect(() => {
-    if (!requestDetails || isHydratingRef.current) return; // 👈 don't autosave while hydrating
+    if (!requestDetails || isHydratingRef.current || isEditingCopiedRoles) return;
+    
     const timeoutId = setTimeout(() => {
       const formData = watch();
       if (!formData || Object.keys(formData).length === 0) return;
@@ -709,7 +711,7 @@ function SelectRolesPage() {
       console.log('💾 Auto-saving Select Roles form data:', { storageKey: sk, formData });
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [watch(), requestDetails]);
+  }, [watch(), requestDetails, isEditingCopiedRoles]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -742,49 +744,60 @@ function SelectRolesPage() {
   // On mount: prefer URL param for a stable ID; load DB first, then overlay local draft.
   useEffect(() => {
     (async () => {
-      const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
+      // Check for copy flow - require ALL three pieces of data to be present
+      const pendingFormData = localStorage.getItem('pendingFormData');
+      const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+      const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+      const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
+      
+      const isCopyFlow = editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
 
       if (isCopyFlow) {
-        const pendingFormData = localStorage.getItem('pendingFormData');
-        const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
-        const copiedUserDetails = localStorage.getItem('copiedUserDetails');
-
-        if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
-          setIsEditingCopiedRoles(true);
-          try {
-            const formData: CopyFlowForm = JSON.parse(pendingFormData);
-            const roleData = JSON.parse(copiedRoleSelections);
-            setRequestDetails({ 
-              employee_name: formData.employeeName, 
-              agency_name: formData.agencyName, 
-              agency_code: formData.agencyCode 
+        setIsEditingCopiedRoles(true);
+        try {
+          const formData: CopyFlowForm = JSON.parse(pendingFormData);
+          const roleData = JSON.parse(copiedRoleSelections);
+          setRequestDetails({ 
+            employee_name: formData.employeeName, 
+            agency_name: formData.agencyName, 
+            agency_code: formData.agencyCode 
+          });
+          
+          console.log('🔧 Copy flow - pendingFormData:', formData);
+          console.log('🔧 Copy flow - roleData:', roleData);
+          
+          // Map copied role data to form fields
+          if (roleData) {
+            Object.entries(roleData).forEach(([key, value]) => {
+              if (typeof value === 'boolean' && value === true) {
+                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+              } else if (typeof value === 'string' && value.trim()) {
+                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+              }
             });
-            
-            // Map copied role data to form fields
-            if (roleData) {
-              Object.entries(roleData).forEach(([key, value]) => {
-                if (typeof value === 'boolean' && value === true) {
-                  setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-                } else if (typeof value === 'string' && value.trim()) {
-                  setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-                }
-              });
-            }
-            
-            // Mark hydration as complete
-            setTimeout(() => {
-              isHydratingRef.current = false;
-            }, 0);
-            return;
-          } catch (e) {
-            console.error('Error loading copy-flow data:', e);
-            toast.error('Error loading copied user data');
           }
-        } else {
-          localStorage.removeItem('editingCopiedRoles');
-          toast.error('Copy flow data is incomplete. Please try again.');
-          navigate('/');
+          
+          // Mark hydration as complete
+          setTimeout(() => {
+            isHydratingRef.current = false;
+          }, 0);
           return;
+        } catch (e) {
+          console.error('Error loading copy-flow data:', e);
+          toast.error('Error loading copied user data');
+          // Clean up invalid copy flow data
+          localStorage.removeItem('editingCopiedRoles');
+          localStorage.removeItem('pendingFormData');
+          localStorage.removeItem('copiedRoleSelections');
+          localStorage.removeItem('copiedUserDetails');
+        }
+      } else {
+        // Clean up any partial copy flow data
+        if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
+          localStorage.removeItem('editingCopiedRoles');
+          localStorage.removeItem('pendingFormData');
+          localStorage.removeItem('copiedRoleSelections');
+          localStorage.removeItem('copiedUserDetails');
         }
       }
 
@@ -802,16 +815,18 @@ function SelectRolesPage() {
       // 1) Load header details and capture them immediately
       const details = await fetchRequestDetails(effectiveId);
 
-      // 2) Try restoring from a stable, person+agency local draft USING those details
-      const restoredStable = restoreFromStableDraftFor(details);
+      // 2) Try restoring from a stable, person+agency local draft USING those details (only if not in copy flow)
+      const restoredStable = !isCopyFlow && restoreFromStableDraftFor(details);
 
-      // 3) If nothing to restore locally, hydrate from DB
-      if (!restoredStable) {
+      // 3) If nothing to restore locally, hydrate from DB (only if not in copy flow)
+      if (!restoredStable && !isCopyFlow) {
         await fetchExistingSelections(effectiveId);
       }
 
-      // 4) Always overlay any legacy id-scoped local draft for backwards compatibility
-      restoreFromLocalDraft(effectiveId);
+      // 4) Always overlay any legacy id-scoped local draft for backwards compatibility (only if not in copy flow)
+      if (!isCopyFlow) {
+        restoreFromLocalDraft(effectiveId);
+      }
 
       // 5) Sync RHF defaults to the UI and open autosave gate
       setTimeout(() => {
@@ -859,21 +874,39 @@ function SelectRolesPage() {
         // Ensure start_date is properly set - this is critical for the database constraint
         const startDate = d.startDate || new Date().toISOString().split('T')[0];
         
-        console.log('🔧 Copy flow - pendingFormData:', d);
-        console.log('🔧 Copy flow - roleData:', roleData);
-           
         console.log('🔧 Copy flow - creating request with data:', {
           startDate,
           employeeName: d.employeeName,
-          submitterName: requiredFields.submitter_name,
-          submitterEmail: requiredFields.submitter_email,
-          email: requiredFields.email,
+          submitterName: d.submitterName,
+          submitterEmail: d.submitterEmail,
+          email: d.email,
           hasStartDate: !!startDate
         });
-        const requestPayload = requiredFields;
+
+        const requiredFields = {
+          start_date: startDate,
+          employee_name: d.employeeName,
+          employee_id: d.employeeId || null,
+          is_non_employee: !!d.isNonEmployee,
+          work_location: d.workLocation || null,
+          work_phone: d.workPhone ? d.workPhone.replace(/\D/g, '') : null,
+          email: d.email,
+          agency_name: d.agencyName,
+          agency_code: d.agencyCode,
+          justification: d.justification || null,
+          submitter_name: d.submitterName,
+          submitter_email: d.submitterEmail,
+          supervisor_name: d.supervisorName,
+          supervisor_email: d.supervisorUsername,
+          security_admin_name: d.securityAdminName,
+          security_admin_email: d.securityAdminUsername,
+          status: 'pending',
+          poc_user: pocUser,
+        };
+
         const { data: newRequest, error: requestError } = await supabase
           .from('security_role_requests')
-          .insert(requestPayload)
+          .insert(requiredFields)
           .select()
           .single();
 
