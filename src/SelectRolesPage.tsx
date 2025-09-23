@@ -882,7 +882,28 @@ function SelectRolesPage() {
           email: d.email,
           hasStartDate: !!startDate
         });
-
+        
+        const requestPayload = {
+          start_date: startDate,
+          employee_name: d.employeeName,
+          employee_id: d.employeeId || null,
+          is_non_employee: !!d.isNonEmployee,
+          work_location: d.workLocation || null,
+          work_phone: d.workPhone ? d.workPhone.replace(/\D/g, '') : null,
+          email: d.email,
+          agency_name: d.agencyName,
+          agency_code: d.agencyCode,
+          justification: d.justification || null,
+          submitter_name: d.submitterName,
+          submitter_email: d.submitterEmail,
+          supervisor_name: d.supervisorName,
+          supervisor_email: d.supervisorUsername,
+          security_admin_name: d.securityAdminName,
+          security_admin_email: d.securityAdminUsername,
+          status: 'pending',
+          poc_user: pocUser,
+        };
+        
         const requiredFields = {
           start_date: startDate,
           employee_name: d.employeeName,
