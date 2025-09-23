@@ -863,6 +863,7 @@ function SelectRolesPage() {
       setSaving(true);
       try {
         const formData: CopyFlowForm = JSON.parse(pendingFormData);
+        if (!d) throw new Error('Invalid pending form data - could not parse JSON');
         const pocUser = localStorage.getItem('pocUserName');
 
         // Create new request
