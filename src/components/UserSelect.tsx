@@ -111,17 +111,17 @@ function UserSelect({
       agencyCode: userDetails.agency_code || '',
       justification: userDetails.justification || '',
 
-      // Submitter details (use current user or original submitter)
-      submitterName: userDetails.submitter_name || '',
-      submitterEmail: userDetails.submitter_email || '',
+      // Submitter details (use current user from formData)
+      submitterName: formData.submitterName || '',
+      submitterEmail: formData.submitterEmail || '',
 
-      // Supervisor details
-      supervisorName: userDetails.supervisor_name || '',
-      supervisorUsername: userDetails.supervisor_email || '', // Note: maps to supervisor_email in DB
+      // Supervisor details (use current user from formData)
+      supervisorName: formData.supervisorName || '',
+      supervisorUsername: formData.supervisorUsername || '', // Note: maps to supervisor_email in DB
 
-      // Security admin details
-      securityAdminName: userDetails.security_admin_name || '',
-      securityAdminUsername: userDetails.security_admin_email || '', // Note: maps to security_admin_email in DB
+      // Security admin details (use current user from formData)
+      securityAdminName: formData.securityAdminName || '',
+      securityAdminUsername: formData.securityAdminUsername || '', // Note: maps to security_admin_email in DB
 
       // Area-specific director details (extract from security_areas if available)
       elmKeyAdmin: userDetails.security_areas?.find((area: any) => area.area_type === 'elm')?.director_name || '',
