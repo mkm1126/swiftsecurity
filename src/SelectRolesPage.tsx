@@ -716,6 +716,71 @@ function SelectRolesPage() {
   // On mount: prefer URL param for a stable ID; load DB first, then overlay local draft.
   useEffect(() => {
     (async () => {
+      // Check for copy flow first, before any requestId validation
+      const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
+      
+      if (isCopyFlow) {
+        const pendingFormData = localStorage.getItem('pendingFormData');
+        const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+        const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+
+        if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
+          setIsEditingCopiedRoles(true);
+          try {
+            const formData = JSON.parse(pendingFormData);
+            const roleData = JSON.parse(copiedRoleSelections);
+            
+            setRequestDetails({ 
+              employee_name: formData.employeeName, 
+              agency_name: formData.agencyName, 
+              agency_code: formData.agencyCode 
+            });
+            
+            // Map copied role data to form fields
+            if (roleData) {
+              Object.entries(roleData).forEach(([key, value]) => {
+                if (typeof value === 'boolean' && value === true) {
+                  // Convert snake_case to camelCase for form fields
+                  const camelKey = snakeToCamel(key);
+                  setValue(camelKey as any, value as any, { shouldDirty: false });
+                } else if (typeof value === 'string' && value.trim()) {
+                  const camelKey = snakeToCamel(key);
+                  setValue(camelKey as any, value as any, { shouldDirty: false });
+                } else if (Array.isArray(value) && value.length > 0) {
+                  const camelKey = snakeToCamel(key);
+                  setValue(camelKey as any, value.join(', ') as any, { shouldDirty: false });
+                }
+              });
+            }
+            
+            // Mark hydration as complete
+            setTimeout(() => {
+              isHydratingRef.current = false;
+            }, 0);
+            
+            return; // Exit early for copy flow
+          } catch (e) {
+            console.error('Error loading copy-flow data:', e);
+            toast.error('Error loading copied user data');
+            // Clean up and fall through to normal flow
+            localStorage.removeItem('editingCopiedRoles');
+            localStorage.removeItem('pendingFormData');
+            localStorage.removeItem('copiedRoleSelections');
+            localStorage.removeItem('copiedUserDetails');
+          }
+        } else {
+          // Missing copy flow data, clean up and redirect
+          localStorage.removeItem('editingCopiedRoles');
+          localStorage.removeItem('pendingFormData');
+          localStorage.removeItem('copiedRoleSelections');
+          localStorage.removeItem('copiedUserDetails');
+          toast.error('Copy flow data is incomplete. Please try again.');
+          navigate('/');
+          return;
+        }
+      }
+      
+      // Normal flow: check for requestId
       const stateRequestId = (location as any)?.state?.requestId;
       const effectiveId = stateRequestId || (idParam as string | null);
   
