@@ -851,6 +851,7 @@ function SelectRolesPage() {
     try {
       if (isEditingCopiedRoles) {
         const pendingFormData = localStorage.getItem('pendingFormData');
+        const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
         if (!pendingFormData) throw new Error('No pending form data found');
 
         const d: CopyFlowForm = JSON.parse(pendingFormData);
@@ -865,11 +866,7 @@ function SelectRolesPage() {
         console.log('🔧 Copy flow - creating request with data:', {
           startDate,
           employeeName: d.employeeName,
-         submitterName: requiredFields.submitter_name,
-         submitterEmail: requiredFields.submitter_email,
-         email: requiredFields.email,
-          hasStartDate: !!startDate
-        });
+        console.log('🔧 Copy flow - creating request with data:', requiredFields);
         const requestPayload = requiredFields;
         const { data: newRequest, error: requestError } = await supabase
           .from('security_role_requests')
