@@ -305,47 +305,8 @@ function HrPayrollRoleSelectionPage() {
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
 
       if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
+        setIsEditingCopiedRoles(true);
         try {
-          const formData = JSON.parse(pendingFormData);
-          const roleData = JSON.parse(copiedRoleSelections);
-          setRequestDetails({ 
-            employee_name: formData.employeeName, 
-            agency_name: formData.agencyName, 
-            agency_code: formData.agencyCode 
-          });
-          
-          // Map copied role data to form fields
-          if (roleData) {
-            Object.entries(roleData).forEach(([key, value]) => {
-              if (typeof value === 'boolean' && value === true) {
-                setValue(key as keyof HrPayrollRoleSelection, value as any, { shouldDirty: false });
-              } else if (typeof value === 'string' && value.trim()) {
-                setValue(key as keyof HrPayrollRoleSelection, value as any, { shouldDirty: false });
-              }
-            });
-          }
-        } catch (e) {
-          console.error('Error loading copy-flow data:', e);
-          toast.error('Error loading copied user data');
-        }
-      } else {
-        // Missing copy flow data, clean up and redirect
-        localStorage.removeItem('editingCopiedRoles');
-        toast.error('Copy flow data is incomplete. Please try again.');
-        navigate('/');
-      }
-    } else {
-      const stateRequestId = location.state?.requestId;
-      const effectiveId = stateRequestId || idParam;
-      if (effectiveId) {
-        setRequestId(effectiveId);
-        fetchRequestDetails(effectiveId);
-      } else {
-        toast.error('Please complete the main form first before selecting HR or Payroll roles.');
-        navigate('/');
-      }
-    }
-  }, [location.state, navigate, idParam, setValue]);
           const formData: CopyFlowForm = JSON.parse(pendingFormData);
           const roleData = JSON.parse(copiedRoleSelections);
           setRequestDetails({ 
@@ -460,18 +421,16 @@ function HrPayrollRoleSelectionPage() {
         toast.error('Copy flow data is incomplete. Please try again.');
         navigate('/');
       }
-      return;
-    }
-
-    // Normal flow - not copying roles
-    const stateRequestId = location.state?.requestId;
-    const effectiveId = stateRequestId || idParam;
-    if (effectiveId) {
-      setRequestId(effectiveId);
-      fetchRequestDetails(effectiveId);
     } else {
-      toast.error('Please complete the main form first before selecting HR or Payroll roles.');
-      navigate('/');
+      const stateRequestId = location.state?.requestId;
+      const effectiveId = stateRequestId || idParam;
+      if (effectiveId) {
+        setRequestId(effectiveId);
+        fetchRequestDetails(effectiveId);
+      } else {
+        toast.error('Please complete the main form first before selecting HR or Payroll roles.');
+        navigate('/');
+      }
     }
   }, [location.state, navigate, idParam, setValue]);
 
@@ -624,45 +583,25 @@ function HrPayrollRoleSelectionPage() {
       };
 
       Object.entries(mappings).forEach(([dbField, formField]) => {
-        if ((data as any)[dbField] !== undefined) {
-          setValue(formField, (data as any)[dbField], { shouldDirty: false });
+        if (data[dbField] !== undefined) {
+          setValue(formField, data[dbField], { shouldDirty: false });
         }
       });
 
-      // ADD: hydrate MultiSelect from DB (prefer array, fall back to CSV)
-      const fromArray = normalizeCodes((data as any).other_business_units);
-      const fromCsv   = normalizeCodes((data as any).agency_codes);
-      const codes     = fromArray.length ? fromArray : fromCsv;
+      // Handle agency codes if present
+      const fromArray = normalizeCodes(data.other_business_units);
+      const fromCsv = normalizeCodes(data.agency_codes);
+      const codes = fromArray.length ? fromArray : fromCsv;
       
       if (codes.length) {
         setSelectedAgencyCodes(codes);
         setValue('agencyCodes', codes.join(', '), { shouldDirty: false });
         setValue('otherBusinessUnits', codes, { shouldDirty: false });
-      
-        // If no stored type but we have codes, assume agency access
-        const storedType = (data as any).add_access_type as AccessType | undefined;
-        if (!storedType) setValue('addAccessType', 'agency', { shouldDirty: false });
+        setValue('addAccessType', 'agency', { shouldDirty: false });
       }
-            
-    } catch (e) {
-      console.error('Failed to fetch existing HR/Payroll role selections:', e);
+    } catch (err) {
+      console.error('Error fetching existing selections:', err);
     }
-  }
-        toast.error('Copy flow data is incomplete. Please try again.');
-        navigate('/');
-      }
-    } else {
-      const stateRequestId = location.state?.requestId;
-      const effectiveId = stateRequestId || idParam;
-      if (effectiveId) {
-        setRequestId(effectiveId);
-        fetchRequestDetails(effectiveId);
-      } else {
-        toast.error('Please complete the main form first before selecting HR or Payroll roles.');
-        navigate('/');
-      }
-    }
-  }, [location.state, navigate, idParam, setValue]);
   }
 
   const handleAgencyCodesChange = (codes: string[]) => {
@@ -1354,27 +1293,8 @@ function HrPayrollRoleSelectionPage() {
                             </div>
 
                             <div>
-                              <h4 className="font-bold text-sm text-gray-900">Mass Time Entry*</h4>
-                              <div className="space-y-1 mt-1">
-                                <label className="flex items-center">
-                                  <input type="checkbox" {...register('massTimeEntryUpdateCorrect')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                  <span className="ml-2 text-sm text-gray-700">Update or Correct*</span>
-                                </label>
-                                <label className="flex items-center">
-                                  <input type="checkbox" {...register('massTimeEntryView')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                  <span className="ml-2 text-sm text-gray-700">View</span>
-                                </label>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Right column */}
-                        <td className="px-4 py-3 align-top">
-                          <div className="space-y-4">
-                            <div>
                               <h4 className="font-bold text-sm text-gray-900">Labor Distribution</h4>
-                              <div className="flex space-x-4 mt-1">
+                              <div className="space-y-1 mt-1">
                                 <label className="flex items-center">
                                   <input type="checkbox" {...register('laborDistributionUpdate')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                   <span className="ml-2 text-sm text-gray-700">Update</span>
@@ -1388,13 +1308,32 @@ function HrPayrollRoleSelectionPage() {
 
                             <div>
                               <h4 className="font-bold text-sm text-gray-900">Leave</h4>
-                              <div className="flex space-x-4 mt-1">
+                              <div className="space-y-1 mt-1">
                                 <label className="flex items-center">
                                   <input type="checkbox" {...register('leaveUpdate')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                   <span className="ml-2 text-sm text-gray-700">Update</span>
                                 </label>
                                 <label className="flex items-center">
                                   <input type="checkbox" {...register('leaveView')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                  <span className="ml-2 text-sm text-gray-700">View</span>
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Right column */}
+                        <td className="px-4 py-3 align-top">
+                          <div className="space-y-4">
+                            <div>
+                              <h4 className="font-bold text-sm text-gray-900">Mass Time Entry*</h4>
+                              <div className="space-y-1 mt-1">
+                                <label className="flex items-center">
+                                  <input type="checkbox" {...register('massTimeEntryUpdateCorrect')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                  <span className="ml-2 text-sm text-gray-700">Update or Correct*</span>
+                                </label>
+                                <label className="flex items-center">
+                                  <input type="checkbox" {...register('massTimeEntryView')} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                   <span className="ml-2 text-sm text-gray-700">View</span>
                                 </label>
                               </div>
