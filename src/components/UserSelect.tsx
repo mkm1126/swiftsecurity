@@ -72,6 +72,66 @@ function UserSelect({ selectedUser, onUserChange, error, required = false, curre
     }
   };
 
+  // Copies this user's roles into localStorage then navigates to the Select Roles page
+  const handleCopyRoles = () => {
+    if (!userDetails) {
+      toast.error('User details not loaded. Please try again.');
+      return;
+    }
+
+    // Pick the best source of role fields
+    const rolesSource =
+      (roleSelections?.role_selection_json &&
+        Object.keys(roleSelections.role_selection_json).length > 0 &&
+        roleSelections.role_selection_json) ||
+      roleSelections ||
+      {};
+
+    // Complete form data for the copy flow - include ALL required fields
+    const completeFormData = {
+      // Employee details
+      startDate: userDetails.start_date || new Date().toISOString().split('T')[0], // Use existing or today's date
+      employeeName: userDetails.employee_name || '',
+      employeeId: userDetails.employee_id || '',
+      isNonEmployee: userDetails.is_non_employee || false,
+      workLocation: userDetails.work_location || '',
+      workPhone: userDetails.work_phone || '',
+      email: userDetails.email || '',
+      agencyName: userDetails.agency_name || '',
+      agencyCode: userDetails.agency_code || '',
+      justification: userDetails.justification || '',
+
+      // Submitter details (use current user or original submitter)
+      submitterName: userDetails.submitter_name || '',
+      submitterEmail: userDetails.submitter_email || '',
+
+      // Supervisor details
+      supervisorName: userDetails.supervisor_name || '',
+      supervisorUsername: userDetails.supervisor_email || '', // Note: maps to supervisor_email in DB
+
+      // Security admin details
+      securityAdminName: userDetails.security_admin_name || '',
+      securityAdminUsername: userDetails.security_admin_email || '', // Note: maps to security_admin_email in DB
+
+      // Area-specific director details (extract from security_areas if available)
+      elmKeyAdmin: userDetails.security_areas?.find((area: any) => area.area_type === 'elm')?.director_name || '',
+      elmKeyAdminUsername: userDetails.security_areas?.find((area: any) => area.area_type === 'elm')?.director_email || '',
+      
+      hrDirector: userDetails.security_areas?.find((area: any) => area.area_type === 'hr_payroll')?.director_name || '',
+      hrDirectorEmail: userDetails.security_areas?.find((area: any) => area.area_type === 'hr_payroll')?.director_email || '',
+      
+      accountingDirector: userDetails.security_areas?.find((area: any) => area.area_type === 'accounting_procurement')?.director_name || '',
+      accountingDirectorUsername: userDetails.security_areas?.find((area: any) => area.area_type === 'accounting_procurement')?.director_email || '',
+
+      // HR-specific fields
+      hrMainframeLogonId: userDetails.hr_mainframe_logon_id || '',
+      hrViewStatewide: userDetails.hr_view_statewide || false,
+    };
+
+    console.log('🔧 Storing complete form data for copy flow:', completeFormData);
+
+    localStorage.setItem('pendingFormData', JSON.stringify(completeFormData));
+
   useEffect(() => {
     fetchUsers();
   }, []);
