@@ -1075,6 +1075,7 @@ function SelectRolesPage() {
                     required
                     error={(errors as any).homeBusinessUnit?.message}
                     searchPlaceholder="Search business units..."
+                    formData={watch()}
                   />
                 </div>
 
