@@ -889,7 +889,7 @@ function SelectRolesPage() {
         const requestPayload = requiredFields;
         const { data: newRequest, error: requestError } = await supabase
           .from('security_role_requests')
-          .insert(requestPayload)
+          .insert(requiredFields)
           .select()
           .single();
 
