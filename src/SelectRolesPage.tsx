@@ -753,7 +753,13 @@ function SelectRolesPage() {
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
       const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
       
-      const isCopyFlow = editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
+      const copyIntent = Boolean((location as any)?.state?.isCopy === true);
+      const stateRequestId = (location as any)?.state?.requestId || null;
+      const urlRequestId = (idParam as string | null);
+      const effectiveIdPre = stateRequestId || urlRequestId || null;
+      const isNewRequest = !effectiveIdPre;
+      const isCopyFlow = !isNewRequest && copyIntent && editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
+      console.debug('🧭 Copy gate:', { copyIntent, editingCopiedRoles, hasPending: Boolean(pendingFormData), hasRoleData: Boolean(copiedRoleSelections), hasUser: Boolean(copiedUserDetails), isNewRequest, isCopyFlow });
 
       if (!isCopyFlow) {
         // Clean up any lingering copy artifacts so a new request starts clean
@@ -776,8 +782,8 @@ function SelectRolesPage() {
             agency_code: formData.agencyCode 
           });
           
-          console.log('🔧 Copy flow - pendingFormData:', formData);
-          console.log('🔧 Copy flow - roleData:', roleData);
+          if (isCopyFlow) console.log('🔧 Copy flow - pendingFormData:', formData);
+          if (isCopyFlow) console.log('🔧 Copy flow - roleData:', roleData);
           
           // Map copied role data to form fields
           if (roleData) {
