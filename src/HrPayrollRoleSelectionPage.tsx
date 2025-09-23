@@ -421,16 +421,18 @@ function HrPayrollRoleSelectionPage() {
         toast.error('Copy flow data is incomplete. Please try again.');
         navigate('/');
       }
+      return;
+    }
+
+    // Normal flow - not copying roles
+    const stateRequestId = location.state?.requestId;
+    const effectiveId = stateRequestId || idParam;
+    if (effectiveId) {
+      setRequestId(effectiveId);
+      fetchRequestDetails(effectiveId);
     } else {
-      const stateRequestId = location.state?.requestId;
-      const effectiveId = stateRequestId || idParam;
-      if (effectiveId) {
-        setRequestId(effectiveId);
-        fetchRequestDetails(effectiveId);
-      } else {
-        toast.error('Please complete the main form first before selecting HR or Payroll roles.');
-        navigate('/');
-      }
+      toast.error('Please complete the main form first before selecting HR or Payroll roles.');
+      navigate('/');
     }
   }, [location.state, navigate, idParam, setValue]);
 
