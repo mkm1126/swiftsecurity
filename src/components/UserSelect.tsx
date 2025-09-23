@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
 import SearchableSelect from './SearchableSelect';
 import UserRoleDetails from './UserRoleDetails';
 
@@ -18,9 +19,18 @@ interface UserSelectProps {
   required?: boolean;
   currentUser?: string | null;
   currentRequestId?: string | null;
+  formData?: any; // Current form data from parent component
 }
 
-function UserSelect({ selectedUser, onUserChange, error, required = false, currentUser, currentRequestId, formData }: UserSelectProps) {
+function UserSelect({ 
+  selectedUser, 
+  onUserChange, 
+  error, 
+  required = false, 
+  currentUser, 
+  currentRequestId,
+  formData 
+}: UserSelectProps) {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -132,6 +142,36 @@ function UserSelect({ selectedUser, onUserChange, error, required = false, curre
 
     localStorage.setItem('pendingFormData', JSON.stringify(completeFormData));
 
+    // Flag the "copy roles" flow
+    localStorage.setItem('editingCopiedRoles', 'true');
+
+    // The roles payload to preload (can be your DB row as-is)
+    localStorage.setItem('copiedRoleSelections', JSON.stringify(rolesSource));
+
+    // Optional: include who we copied from
+    localStorage.setItem(
+      'copiedUserDetails',
+      JSON.stringify({
+        id: userDetails?.id ?? null,
+        email: userDetails?.email ?? null,
+      })
+    );
+
+    // Determine which page to navigate to based on security area
+    const securityAreas = userDetails.security_areas || [];
+    
+    if (securityAreas.some((area: any) => area.area_type === 'elm')) {
+      navigate('/elm-roles');
+    } else if (securityAreas.some((area: any) => area.area_type === 'epm_data_warehouse')) {
+      navigate('/epm-dwh-roles');
+    } else if (securityAreas.some((area: any) => area.area_type === 'hr_payroll')) {
+      navigate('/hr-payroll-roles');
+    } else {
+      // Default to accounting/procurement
+      navigate('/select-roles');
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -144,6 +184,7 @@ function UserSelect({ selectedUser, onUserChange, error, required = false, curre
       setRoleSelections(null);
     }
   }, [selectedUser]);
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -231,6 +272,7 @@ function UserSelect({ selectedUser, onUserChange, error, required = false, curre
       setLoadingDetails(false);
     }
   };
+
   const handleUserChange = (selectedValue: string) => {
     console.log('🔧 UserSelect handleUserChange called with:', selectedValue);
     
@@ -289,7 +331,8 @@ function UserSelect({ selectedUser, onUserChange, error, required = false, curre
             <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
               <UserRoleDetails 
                 userDetails={userDetails} 
-                roleSelections={roleSelections} 
+                roleSelections={roleSelections}
+                onEditRoles={handleEditRoles}
               />
             </div>
           )}
