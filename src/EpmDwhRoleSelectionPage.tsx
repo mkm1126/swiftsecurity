@@ -174,17 +174,56 @@ export default function EpmDwhRoleSelectionPage() {
   }, [watch(), requestDetails]);
 
   useEffect(() => {
-    const stateRequestId = location.state?.requestId;
-    const effectiveId = stateRequestId || idParam;
-    
-    if (!effectiveId) {
-      toast.error('Please complete the main form first before selecting EPM Data Warehouse roles.');
-      navigate('/');
-      return;
+    const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
+
+    if (isCopyFlow) {
+      const pendingFormData = localStorage.getItem('pendingFormData');
+      const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+      const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+
+      if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
+        try {
+          const formData = JSON.parse(pendingFormData);
+          const roleData = JSON.parse(copiedRoleSelections);
+          setRequestDetails({ 
+            employee_name: formData.employeeName, 
+            agency_name: formData.agencyName, 
+            agency_code: formData.agencyCode 
+          });
+          
+          // Map copied role data to form fields
+          if (roleData) {
+            Object.entries(roleData).forEach(([key, value]) => {
+              if (typeof value === 'boolean' && value === true) {
+                setValue(key as keyof Form, value as any, { shouldDirty: false });
+              } else if (typeof value === 'string' && value.trim()) {
+                setValue(key as keyof Form, value as any, { shouldDirty: false });
+              }
+            });
+          }
+        } catch (e) {
+          console.error('Error loading copy-flow data:', e);
+          toast.error('Error loading copied user data');
+        }
+      } else {
+        // Missing copy flow data, clean up and redirect
+        localStorage.removeItem('editingCopiedRoles');
+        toast.error('Copy flow data is incomplete. Please try again.');
+        navigate('/');
+      }
+    } else {
+      const stateRequestId = location.state?.requestId;
+      const effectiveId = stateRequestId || idParam;
+      
+      if (!effectiveId) {
+        toast.error('Please complete the main form first before selecting EPM Data Warehouse roles.');
+        navigate('/');
+        return;
+      }
+      
+      setRequestId(effectiveId);
+      fetchRequestDetails(effectiveId);
     }
-    
-    setRequestId(effectiveId);
-    fetchRequestDetails(effectiveId);
   }, [location.state, navigate, idParam]);
 
   // Try to restore saved form data after request details are loaded

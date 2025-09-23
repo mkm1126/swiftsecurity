@@ -170,29 +170,37 @@ function ElmRoleSelectionPage() {
   }, [watch(), requestDetails]);
 
   useEffect(() => {
-    const pendingFormData = localStorage.getItem('pendingFormData');
-    const editingCopiedRoles = localStorage.getItem('editingCopiedRoles');
-    const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
-    const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+    const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
 
-    if (editingCopiedRoles === 'true' && pendingFormData && copiedRoleSelections && copiedUserDetails) {
-      setIsEditingCopiedRoles(true);
-      try {
-        const formData: CopyFlowForm = JSON.parse(pendingFormData);
-        const roleData = JSON.parse(copiedRoleSelections);
-        setRequestDetails({ employee_name: formData.employeeName, agency_name: formData.agencyName, agency_code: formData.agencyCode });
-        setValue('learningAdministrator', !!roleData?.elm_system_administrator);
-        setValue('externalLearnerSecurityAdministrator', !!roleData?.elm_key_administrator);
-        setValue('learningCatalogAdministrator', !!roleData?.elm_course_administrator);
-        setValue('rosterAdministrator', !!roleData?.elm_reporting_administrator);
-        setValue('profileAdministrator', !!roleData?.manage_user_accounts);
-        setValue('enrollmentAdministrator', !!roleData?.assign_user_roles);
-        setValue('maintainApprovals', !!roleData?.view_user_progress);
-        setValue('sandboxAccess', !!roleData?.system_backup_access);
-        setValue('roleJustification', roleData?.role_justification || '');
-      } catch (e) {
-        console.error('Error loading copy-flow data:', e);
-        toast.error('Error loading copied user data');
+    if (isCopyFlow) {
+      const pendingFormData = localStorage.getItem('pendingFormData');
+      const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+      const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+
+      if (pendingFormData && copiedRoleSelections && copiedUserDetails) {
+        setIsEditingCopiedRoles(true);
+        try {
+          const formData: CopyFlowForm = JSON.parse(pendingFormData);
+          const roleData = JSON.parse(copiedRoleSelections);
+          setRequestDetails({ employee_name: formData.employeeName, agency_name: formData.agencyName, agency_code: formData.agencyCode });
+          setValue('learningAdministrator', !!roleData?.elm_system_administrator);
+          setValue('externalLearnerSecurityAdministrator', !!roleData?.elm_key_administrator);
+          setValue('learningCatalogAdministrator', !!roleData?.elm_course_administrator);
+          setValue('rosterAdministrator', !!roleData?.elm_reporting_administrator);
+          setValue('profileAdministrator', !!roleData?.manage_user_accounts);
+          setValue('enrollmentAdministrator', !!roleData?.assign_user_roles);
+          setValue('maintainApprovals', !!roleData?.view_user_progress);
+          setValue('sandboxAccess', !!roleData?.system_backup_access);
+          setValue('roleJustification', roleData?.role_justification || '');
+        } catch (e) {
+          console.error('Error loading copy-flow data:', e);
+          toast.error('Error loading copied user data');
+        }
+      } else {
+        // Missing copy flow data, clean up and redirect
+        localStorage.removeItem('editingCopiedRoles');
+        toast.error('Copy flow data is incomplete. Please try again.');
+        navigate('/');
       }
     } else {
       const stateRequestId = location.state?.requestId;
@@ -203,6 +211,7 @@ function ElmRoleSelectionPage() {
         fetchExistingSelections(effectiveId);
       } else {
         toast.error('Please complete the main form first before selecting ELM roles.');
+        navigate('/');
       }
     }
   }, [location.state, navigate, setValue]);
