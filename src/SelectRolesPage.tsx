@@ -886,8 +886,6 @@ function SelectRolesPage() {
           supervisor_email: formData.supervisorUsername,
           security_admin_name: formData.securityAdminName,
           security_admin_email: formData.securityAdminUsername,
-          hr_mainframe_logon_id: d.hrMainframeLogonId || null,
-          hr_view_statewide: !!d.hrViewStatewide,
           status: 'pending',
           poc_user: pocUser,
         };
