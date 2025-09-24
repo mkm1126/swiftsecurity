@@ -747,14 +747,14 @@ function SelectRolesPage() {
   // On mount: prefer URL param for a stable ID; load DB first, then overlay local draft.
   useEffect(() => {
     // Read the "copy user" payload dropped in by UserSelect
-    const pendingFormDataRaw = localStorage.getItem('pendingFormData');
-    const copiedRoleSelectionsRaw = localStorage.getItem('copiedRoleSelections');
-    const copiedUserDetailsRaw = localStorage.getItem('copiedUserDetails');
-    const editingCopiedRoles =
-      localStorage.getItem('editingCopiedRoles') === 'true';
+  const pendingFormData = localStorage.getItem('pendingFormData');
+  const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+  const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+  const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
   
-    const hasCopyPayload =
-      !!pendingFormDataRaw && !!copiedRoleSelectionsRaw && !!copiedUserDetailsRaw;
+  // NEW: allow copy mode if the payload exists even without the flag
+  const hasCopyPayload = Boolean(pendingFormData && copiedRoleSelections && copiedUserDetails);
+  const isCopyFlow = editingCopiedRoles || hasCopyPayload;
   
     if (!hasCopyPayload) {
       return; // Nothing to hydrate
@@ -839,7 +839,13 @@ function SelectRolesPage() {
     setSaving(true);
 
     try {
-      if (isEditingCopiedRoles) {
+        const hasCopyPayload = Boolean(
+        localStorage.getItem('pendingFormData') &&
+        localStorage.getItem('copiedRoleSelections') &&
+        localStorage.getItem('copiedUserDetails')
+      );
+      
+      if (isEditingCopiedRoles || hasCopyPayload) {
         const pendingFormData = localStorage.getItem('pendingFormData');
         if (!pendingFormData) throw new Error('No pending form data found');
 
