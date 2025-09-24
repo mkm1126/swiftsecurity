@@ -746,118 +746,72 @@ function SelectRolesPage() {
   
   // On mount: prefer URL param for a stable ID; load DB first, then overlay local draft.
   useEffect(() => {
-    (async () => {
-      // Check for copy flow - require ALL three pieces of data to be present
-      const pendingFormData = localStorage.getItem('pendingFormData');
-      const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
-      const copiedUserDetails = localStorage.getItem('copiedUserDetails');
-      const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
-      
-      const copyIntent = Boolean((location as any)?.state?.isCopy === true);
-      // stateRequestId already declared above; reusing it.
-      // urlRequestId already derived via idParam above; reusing it.
-      const effectiveIdPre = stateRequestId || urlRequestId || null;
-      const isNewRequest = !effectiveIdPre;
-      const isCopyFlow = !isNewRequest && copyIntent && editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
-      console.debug('🧭 Copy gate:', { copyIntent, editingCopiedRoles, hasPending: Boolean(pendingFormData), hasRoleData: Boolean(copiedRoleSelections), hasUser: Boolean(copiedUserDetails), isNewRequest, isCopyFlow });
-
-      if (!isCopyFlow) {
-        // Clean up any lingering copy artifacts so a new request starts clean
-        if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
-          localStorage.removeItem('editingCopiedRoles');
-          localStorage.removeItem('pendingFormData');
-          localStorage.removeItem('copiedRoleSelections');
-          localStorage.removeItem('copiedUserDetails');
+    // Read the "copy user" payload dropped in by UserSelect
+    const pendingFormDataRaw = localStorage.getItem('pendingFormData');
+    const copiedRoleSelectionsRaw = localStorage.getItem('copiedRoleSelections');
+    const copiedUserDetailsRaw = localStorage.getItem('copiedUserDetails');
+    const editingCopiedRoles =
+      localStorage.getItem('editingCopiedRoles') === 'true';
+  
+    const hasCopyPayload =
+      !!pendingFormDataRaw && !!copiedRoleSelectionsRaw && !!copiedUserDetailsRaw;
+  
+    if (!hasCopyPayload) {
+      return; // Nothing to hydrate
+    }
+  
+    try {
+      const pending = JSON.parse(pendingFormDataRaw || '{}'); // { employeeName, agencyName, agencyCode, ... }
+      const roles = JSON.parse(copiedRoleSelectionsRaw || '{}'); // booleans + strings
+      const details = JSON.parse(copiedUserDetailsRaw || '{}');  // { employee_id, email, ... }
+  
+      // Start from current form values, then apply copy payload
+      const current = getValues();
+      const nextDefaults: Record<string, any> = { ...current };
+  
+      // Top-of-form identity fields (use whatever you actually bind to the inputs)
+      if (pending.employeeName) nextDefaults.employeeName = pending.employeeName;
+      if (pending.agencyName)   nextDefaults.agencyName   = pending.agencyName;
+      if (pending.agencyCode)   nextDefaults.agencyCode   = pending.agencyCode;
+  
+      // If you store these in the form, pull them too
+      if (details.employee_id)  nextDefaults.employeeId   = details.employee_id;
+      if (details.email)        nextDefaults.email        = details.email;
+  
+      // Copy booleans from role selections
+      Object.entries(roles).forEach(([k, v]) => {
+        if (typeof v === 'boolean') nextDefaults[k] = v;
+      });
+  
+      // Copy non-empty string fields from role selections
+      Object.entries(roles).forEach(([k, v]) => {
+        if (typeof v === 'string' && v !== '') nextDefaults[k] = v;
+      });
+  
+      // One atomic hydrate so controlled inputs pick everything up
+      reset(nextDefaults, { keepDirty: false, keepDefaultValues: false });
+  
+      console.log(
+        '✅ Copy flow - hydrated form with',
+        {
+          employeeName: nextDefaults.employeeName,
+          agencyName: nextDefaults.agencyName,
+          agencyCode: nextDefaults.agencyCode,
         }
+      );
+  
+      // Clear once applied (unless we’re staying in "edit copied roles" loop)
+      if (!editingCopiedRoles) {
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
+        localStorage.removeItem('editingCopiedRoles');
       }
+    } catch (e) {
+      console.error('❌ Copy flow - failed to parse payload', e);
+    }
+  }, [reset, getValues]);
 
-      if (isCopyFlow) {
-        setIsEditingCopiedRoles(true);
-        try {
-          const formData: CopyFlowForm = JSON.parse(pendingFormData);
-          const roleData = JSON.parse(copiedRoleSelections);
-          setRequestDetails({ 
-            employee_name: formData.employeeName, 
-            agency_name: formData.agencyName, 
-            agency_code: formData.agencyCode 
-          });
-          
-          if (isCopyFlow) console.log('🔧 Copy flow - pendingFormData:', formData);
-          if (isCopyFlow) console.log('🔧 Copy flow - roleData:', roleData);
-          
-          // Map copied role data to form fields
-          if (roleData) {
-            Object.entries(roleData).forEach(([key, value]) => {
-              if (typeof value === 'boolean' && value === true) {
-                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-              } else if (typeof value === 'string' && value.trim()) {
-                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-              }
-            });
-          }
-          
-          // Mark hydration as complete
-          setTimeout(() => {
-            isHydratingRef.current = false;
-          }, 0);
-          return;
-        } catch (e) {
-          console.error('Error loading copy-flow data:', e);
-          toast.error('Error loading copied user data');
-          // Clean up invalid copy flow data
-          localStorage.removeItem('editingCopiedRoles');
-          localStorage.removeItem('pendingFormData');
-          localStorage.removeItem('copiedRoleSelections');
-          localStorage.removeItem('copiedUserDetails');
-        }
-      } else {
-        // Clean up any partial copy flow data
-        if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
-          localStorage.removeItem('editingCopiedRoles');
-          localStorage.removeItem('pendingFormData');
-          localStorage.removeItem('copiedRoleSelections');
-          localStorage.removeItem('copiedUserDetails');
-        }
-      }
-
-      const stateRequestId = (location as any)?.state?.requestId;
-      const effectiveId = stateRequestId || (idParam as string | null);
-
-      if (!effectiveId) {
-        toast.error('Please complete the main form first before selecting roles.');
-        navigate('/');
-        return;
-      }
-
-      setRequestId(effectiveId);
-
-      // 1) Load header details and capture them immediately
-      const details = await fetchRequestDetails(effectiveId);
-
-      // 2) For edit flows: hydrate from DB first, then optionally apply stable restore
-      let restoredStable = false;
-      let hadDbSelections = false;
-      if (!isCopyFlow) {
-        hadDbSelections = await fetchExistingSelections(effectiveId);
-        if (hadDbSelections) {
-          restoredStable = restoreFromStableDraftFor(details);
-        }
-      }
-
-      // 4) Always overlay any legacy id-scoped local draft for backwards compatibility (only if not in copy flow)
-      if (!isCopyFlow) {
-        restoreFromLocalDraft(effectiveId);
-      }
-
-      // 5) Sync RHF defaults to the UI and open autosave gate
-      setTimeout(() => {
-        const snap = getValues();
-        reset(snap);
-        isHydratingRef.current = false; // 👈 now autosave may run
-        console.log('🔁 Final sync after all hydration layers; autosave enabled:', snap);
-      }, 0);
-    })();
-  }, [location.state, idParam, navigate, reset, setValue, getValues, clearErrors]);
 
   // Submit
   const onSubmit = async (data: SecurityRoleSelection) => {
