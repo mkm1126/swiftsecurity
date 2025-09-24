@@ -5,6 +5,10 @@ import { toast } from 'sonner';
 import SearchableSelect from './SearchableSelect';
 import UserRoleDetails from './UserRoleDetails';
 
+/** ===== Debug toggle + helper ===== */
+const DEBUG = true; // set to false to silence logs
+const log = (...args: any[]) => { if (DEBUG) console.log(...args); };
+
 interface User {
   employee_name: string;
   employee_id: string;
@@ -20,6 +24,53 @@ interface UserSelectProps {
   currentUser?: string | null;
   currentRequestId?: string | null;
   formData?: any; // Current form data from parent component
+}
+
+/** Utility: camelCase a snake_case key */
+function toCamel(key: string) {
+  return key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+/** Utility: deep map keys to camelCase (1 level is enough for our data) */
+function camelizeKeys<T extends Record<string, any>>(obj: T | null | undefined): Record<string, any> {
+  if (!obj || typeof obj !== 'object') return {};
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const ck = toCamel(k);
+    out[ck] = v;
+  }
+  return out;
+}
+
+/** Build a normalized roles payload expected by SelectRolesPage.
+ *  Prefers role_selection_json if present; falls back to top-level columns.
+ *  Ensures camelCase keys and strips non-role metadata.
+ */
+function normalizeRoles(roleSelections: any): Record<string, any> {
+  if (!roleSelections) return {};
+  const json = (roleSelections?.role_selection_json && Object.keys(roleSelections.role_selection_json).length > 0)
+    ? roleSelections.role_selection_json
+    : roleSelections;
+
+  const excluded = new Set([
+    'id', 'created_at', 'updated_at', 'request_id',
+    'role_justification', 'roleJustification'
+  ]);
+
+  const base = camelizeKeys(json);
+  for (const k of Object.keys(base)) {
+    if (excluded.has(k)) delete base[k];
+  }
+
+  // Map common snake_case to expected camelCase aliases if needed
+  if (roleSelections?.home_business_unit && !base.homeBusinessUnit) {
+    base.homeBusinessUnit = roleSelections.home_business_unit;
+  }
+  if (roleSelections?.other_business_units && !base.otherBusinessUnits) {
+    base.otherBusinessUnits = roleSelections.other_business_units;
+  }
+
+  return base;
 }
 
 function UserSelect({ 
@@ -38,69 +89,81 @@ function UserSelect({
   const [roleSelections, setRoleSelections] = useState<any>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
+  const goToCorrectArea = (details: any) => {
+    const securityAreas = details?.security_areas || [];
+    if (securityAreas.some((a: any) => a.area_type === 'elm')) return '/elm-roles';
+    if (securityAreas.some((a: any) => a.area_type === 'epm_data_warehouse')) return '/epm-dwh-roles';
+    if (securityAreas.some((a: any) => a.area_type === 'hr_payroll')) return '/hr-payroll-roles';
+    return '/select-roles';
+  };
+
+  const persistCopyContext = (payload: {
+    pendingFormData: any,
+    roleSelections: any,
+    userDetails: any,
+    mode: 'copy' | 'editCopied'
+  }) => {
+    const { pendingFormData, roleSelections, userDetails, mode } = payload;
+    const normalizedRoles = normalizeRoles(roleSelections);
+
+    // Guarantee the flags + keys that SelectRolesPage looks for
+    localStorage.setItem('isCopyFlow', 'true');
+    localStorage.setItem('editingCopiedRoles', mode === 'editCopied' ? 'true' : 'true'); // keep same flag used elsewhere
+
+    // Save both a raw and normalized version to be future-proof
+    localStorage.setItem('pendingFormData', JSON.stringify(pendingFormData));
+    localStorage.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData)); // some pages referenced this earlier
+    localStorage.setItem('copiedRoleSelectionsRaw', JSON.stringify(roleSelections || {}));
+    localStorage.setItem('copiedRoleSelections', JSON.stringify(normalizedRoles));
+
+    localStorage.setItem('copiedUserDetails', JSON.stringify({
+      id: userDetails?.id ?? null,
+      email: userDetails?.email ?? null,
+      employee_name: userDetails?.employee_name ?? null,
+      employee_id: userDetails?.employee_id ?? null,
+    }));
+
+    localStorage.setItem('copyFlowSource', JSON.stringify({
+      createdFromRequestId: userDetails?.id ?? null,
+      createdAt: new Date().toISOString()
+    }));
+
+    log('📦 Copy/Edit flow context saved:', {
+      pendingFormData,
+      normalizedRolesKeys: Object.keys(normalizedRoles),
+      mode
+    });
+
+    return { normalizedRoles };
+  };
+
   const handleEditRoles = () => {
     if (!selectedUser || !userDetails) {
       console.error('No user selected or user details not loaded');
       return;
     }
-
-    // Get the current form data from the parent component
     const currentFormData = formData || {};
-    
-    // Store the current form data
-    localStorage.setItem('pendingFormData', JSON.stringify(currentFormData));
-    
-    // Set a flag to indicate we're editing copied roles, not creating a new request
-    localStorage.setItem('editingCopiedRoles', 'true');
-    
-    // Store the copied user's role selections
-    localStorage.setItem('copiedRoleSelections', JSON.stringify(roleSelections));
-    
-    // Store the copied user's details
-    localStorage.setItem('copiedUserDetails', JSON.stringify(userDetails));
-    
-    console.log('Stored data for editing roles:', {
-      formData: currentFormData,
+    const { normalizedRoles } = persistCopyContext({
+      pendingFormData: currentFormData,
       roleSelections,
-      userDetails
+      userDetails,
+      mode: 'editCopied'
     });
-    
-    // Determine which page to navigate to based on security area
-    const securityAreas = userDetails.security_areas || [];
-    
-    if (securityAreas.some((area: any) => area.area_type === 'elm')) {
-      navigate('/elm-roles');
-    } else if (securityAreas.some((area: any) => area.area_type === 'epm_data_warehouse')) {
-      navigate('/epm-dwh-roles');
-    } else if (securityAreas.some((area: any) => area.area_type === 'hr_payroll')) {
-      navigate('/hr-payroll-roles');
-    } else if (securityAreas.some((area: any) => area.area_type === 'accounting_procurement')) {
-      navigate('/select-roles');
-    } else {
-      // Default to accounting/procurement if no specific area found
-      navigate('/select-roles');
-    }
+    log('✍️ Edit roles for copied user - normalized roles:', normalizedRoles);
+    navigate(goToCorrectArea(userDetails));
   };
 
-  // Copies this user's roles into localStorage then navigates to the Select Roles page
+  // Copies this user's roles into localStorage then navigates to the area page
   const handleCopyRoles = () => {
     if (!userDetails) {
       toast.error('User details not loaded. Please try again.');
       return;
     }
 
-    // Pick the best source of role fields
-    const rolesSource =
-      (roleSelections?.role_selection_json &&
-        Object.keys(roleSelections.role_selection_json).length > 0 &&
-        roleSelections.role_selection_json) ||
-      roleSelections ||
-      {};
-
-    // Complete form data for the copy flow - include ALL required fields
+    // Build complete form data for the copy flow - ensure required fields are present
     const completeFormData = {
-      // Employee details
-      startDate: formData?.startDate || userDetails.start_date || new Date().toISOString().split('T')[0], // Use current form, existing, or today's date
+      // Employee details (copied user)
+      startDate: formData?.startDate || userDetails.start_date || new Date().toISOString().split('T')[0],
       employeeName: userDetails.employee_name || '',
       employeeId: userDetails.employee_id || '',
       isNonEmployee: userDetails.is_non_employee || false,
@@ -111,65 +174,41 @@ function UserSelect({
       agencyCode: userDetails.agency_code || '',
       justification: userDetails.justification || '',
 
-      // Submitter details (use current user from formData, not copied user)
+      // Submitter details (stay as current requestor)
       submitterName: formData?.submitterName || '',
       submitterEmail: formData?.submitterEmail || '',
 
-      // Supervisor details (use current user from formData, not copied user)
+      // Supervisor details (stay as current selection)
       supervisorName: formData?.supervisorName || '',
-      supervisorUsername: formData?.supervisorUsername || '', // Note: maps to supervisor_email in DB
+      supervisorUsername: formData?.supervisorUsername || '',
 
-      // Security admin details (use current user from formData, not copied user)
+      // Security admin details
       securityAdminName: formData?.securityAdminName || '',
-      securityAdminUsername: formData?.securityAdminUsername || '', // Note: maps to security_admin_email in DB
+      securityAdminUsername: formData?.securityAdminUsername || '',
 
-      // Area-specific director details (extract from security_areas if available)
-      elmKeyAdmin: userDetails.security_areas?.find((area: any) => area.area_type === 'elm')?.director_name || '',
-      elmKeyAdminUsername: userDetails.security_areas?.find((area: any) => area.area_type === 'elm')?.director_email || '',
-      
-      hrDirector: userDetails.security_areas?.find((area: any) => area.area_type === 'hr_payroll')?.director_name || '',
-      hrDirectorEmail: userDetails.security_areas?.find((area: any) => area.area_type === 'hr_payroll')?.director_email || '',
-      
-      accountingDirector: userDetails.security_areas?.find((area: any) => area.area_type === 'accounting_procurement')?.director_name || '',
-      accountingDirectorUsername: userDetails.security_areas?.find((area: any) => area.area_type === 'accounting_procurement')?.director_email || '',
+      // Area-specific director details (from the copied user's request)
+      elmKeyAdmin: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_name || '',
+      elmKeyAdminUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_email || '',
+      hrDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_name || '',
+      hrDirectorEmail: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_email || '',
+      accountingDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_name || '',
+      accountingDirectorUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_email || '',
 
       // HR-specific fields (from copied user)
       hrMainframeLogonId: userDetails.hr_mainframe_logon_id || '',
       hrViewStatewide: userDetails.hr_view_statewide || false,
     };
 
-    console.log('🔧 Storing complete form data for copy flow:', completeFormData);
+    const { normalizedRoles } = persistCopyContext({
+      pendingFormData: completeFormData,
+      roleSelections,
+      userDetails,
+      mode: 'copy'
+    });
 
-    localStorage.setItem('pendingFormData', JSON.stringify(completeFormData));
-
-    // Flag the "copy roles" flow
-    localStorage.setItem('editingCopiedRoles', 'true');
-
-    // The roles payload to preload (can be your DB row as-is)
-    localStorage.setItem('copiedRoleSelections', JSON.stringify(rolesSource));
-
-    // Optional: include who we copied from
-    localStorage.setItem(
-      'copiedUserDetails',
-      JSON.stringify({
-        id: userDetails?.id ?? null,
-        email: userDetails?.email ?? null,
-      })
-    );
-
-    // Determine which page to navigate to based on security area
-    const securityAreas = userDetails.security_areas || [];
-    
-    if (securityAreas.some((area: any) => area.area_type === 'elm')) {
-      navigate('/elm-roles');
-    } else if (securityAreas.some((area: any) => area.area_type === 'epm_data_warehouse')) {
-      navigate('/epm-dwh-roles');
-    } else if (securityAreas.some((area: any) => area.area_type === 'hr_payroll')) {
-      navigate('/hr-payroll-roles');
-    } else {
-      // Default to accounting/procurement
-      navigate('/select-roles');
-    }
+    log('✅ Copy flow initiatied - normalized roles keys:', Object.keys(normalizedRoles));
+    toast.success('Roles copied. Opening role selection…');
+    navigate(goToCorrectArea(userDetails));
   };
 
   useEffect(() => {
@@ -201,19 +240,19 @@ function UserSelect({
             director_email
           )
         `)
-        .in('status', ['approved', 'completed']) // Show approved and completed requests
+        .in('status', ['approved', 'completed'])
         .not('employee_name', 'is', null)
         .not('employee_id', 'is', null)
         .order('employee_name');
 
       if (error) throw error;
 
-      console.log('All users fetched from approved/completed requests:', data);
+      log('All users fetched from approved/completed requests:', data);
 
-      // Remove duplicates based on employee_id, keeping the most recent
-      const uniqueUsers = data.reduce((acc: User[], current) => {
-        const existingUser = acc.find(user => user.employee_id === current.employee_id);
-        if (!existingUser) {
+      // Dedup by employee_id
+      const uniqueUsers = data.reduce((acc: User[], current: any) => {
+        const exists = acc.find(u => u.employee_id === current.employee_id);
+        if (!exists) {
           acc.push({
             employee_name: current.employee_name,
             employee_id: current.employee_id || '',
@@ -235,8 +274,8 @@ function UserSelect({
   const fetchUserDetails = async (requestId: string) => {
     setLoadingDetails(true);
     try {
-      console.log('Fetching user details for request ID:', requestId);
-      
+      log('Fetching user details for request ID:', requestId);
+
       // Fetch request details with security areas
       const { data: requestData, error: requestError } = await supabase
         .from('security_role_requests')
@@ -252,7 +291,7 @@ function UserSelect({
         .single();
 
       if (requestError) throw requestError;
-      console.log('Request data fetched:', requestData);
+      log('Request data fetched:', requestData);
       setUserDetails(requestData);
 
       // Fetch role selections
@@ -263,7 +302,7 @@ function UserSelect({
         .maybeSingle();
 
       if (roleError) throw roleError;
-      console.log('Role data fetched:', roleData);
+      log('Role data fetched:', roleData);
       setRoleSelections(roleData);
 
     } catch (error) {
@@ -274,17 +313,17 @@ function UserSelect({
   };
 
   const handleUserChange = (selectedValue: string) => {
-    console.log('🔧 UserSelect handleUserChange called with:', selectedValue);
-    
+    log('🔧 UserSelect handleUserChange called with:', selectedValue);
+
     if (!selectedValue) {
-      console.log('🔧 No value selected, calling onUserChange with null');
+      log('🔧 No value selected, calling onUserChange with null');
       onUserChange(null);
       return;
     }
 
     const user = users.find(u => `${u.employee_name} (${u.employee_id})` === selectedValue);
-    console.log('🔧 Found user:', user);
-    console.log('🔧 Calling onUserChange with user:', user);
+    log('🔧 Found user:', user);
+    log('🔧 Calling onUserChange with user:', user);
     onUserChange(user || null);
   };
 
@@ -318,7 +357,7 @@ function UserSelect({
           </p>
         </div>
       )}
-      
+
       {/* Show selected user details */}
       {selectedUser && (
         <div className="mt-4">
@@ -334,6 +373,20 @@ function UserSelect({
                 roleSelections={roleSelections}
                 onEditRoles={handleEditRoles}
               />
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={handleCopyRoles}
+                  className="inline-flex items-center px-3 py-1 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Copy These Roles
+                </button>
+                <button
+                  onClick={handleEditRoles}
+                  className="inline-flex items-center px-3 py-1 border border-green-300 text-sm font-medium rounded-md text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  Edit Before Copying
+                </button>
+              </div>
             </div>
           )}
         </div>
