@@ -750,6 +750,8 @@ function SelectRolesPage() {
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
       
       // ---- Copy-flow hydration (robust + no globals) -----------------------
+      const isCopyFlow = Boolean((location as any)?.state?.copiedUserDetails || (location as any)?.state?.copiedRoleSelections || (location as any)?.state?.pendingFormData || (location as any)?.state?.copy === true);
+
       try {
         const rawForm = localStorage.getItem('pendingFormData');
         const rawRoles = localStorage.getItem('copiedRoleSelections');
