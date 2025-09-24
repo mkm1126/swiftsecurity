@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Database, FileText, Users, Shield, AlertTriangle, Edit } from 'lucide-react';
+import { Check, Database, Users, Shield, AlertTriangle, Edit } from 'lucide-react';
 
 interface UserRoleDetailsProps {
   userDetails: any;
@@ -9,50 +9,67 @@ interface UserRoleDetailsProps {
 }
 
 /** ===== Debug toggle + helper ===== */
-const DEBUG = true; // set to false to silence logs (or use process.env.NODE_ENV === 'development')
+const DEBUG = true; // set to false to silence logs
 const debugLog = (...args: any[]) => {
   if (DEBUG) console.log(...args);
 };
+
+/** Utility: camelCase a snake_case key */
+function toCamel(key: string) {
+  return key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+function normalizeRoles(roleSelections: any): Record<string, any> {
+  if (!roleSelections) return {};
+  const hasJson = roleSelections?.role_selection_json && typeof roleSelections.role_selection_json === 'object' && Object.keys(roleSelections.role_selection_json).length > 0;
+  const dataSource = hasJson ? roleSelections.role_selection_json : roleSelections;
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(dataSource)) {
+    const ck = toCamel(k);
+    out[ck] = v;
+  }
+  // aliases for common fields
+  if (roleSelections?.home_business_unit && !out.homeBusinessUnit) out.homeBusinessUnit = roleSelections.home_business_unit;
+  if (roleSelections?.other_business_units && !out.otherBusinessUnits) out.otherBusinessUnits = roleSelections.other_business_units;
+  return out;
+}
 
 function UserRoleDetails({ userDetails, roleSelections, onEditRoles }: UserRoleDetailsProps) {
   const navigate = useNavigate();
 
   // Copies this user's roles into localStorage then navigates to the Select Roles page
   const handleCopyRoles = () => {
-    // Pick the best source of role fields
-    const rolesSource =
-      (roleSelections?.role_selection_json &&
-        Object.keys(roleSelections.role_selection_json).length > 0 &&
-        roleSelections.role_selection_json) ||
-      roleSelections ||
-      {};
+    // Pick and normalize the best source of role fields
+    const normalized = normalizeRoles(roleSelections || {});
 
     // Basic info for the target form header
-    localStorage.setItem(
-      'pendingFormData',
-      JSON.stringify({
-        employeeName: userDetails?.employee_name || '',
-        agencyName: userDetails?.agency_name || '',
-        agencyCode: userDetails?.agency_code || '',
-      })
-    );
+    const pendingFormData = {
+      employeeName: userDetails?.employee_name || '',
+      agencyName: userDetails?.agency_name || '',
+      agencyCode: userDetails?.agency_code || '',
+    };
 
-    // Flag the “copy roles” flow
+    // Flags & payloads
+    localStorage.setItem('isCopyFlow', 'true');
     localStorage.setItem('editingCopiedRoles', 'true');
 
-    // The roles payload to preload (can be your DB row as-is)
-    localStorage.setItem('copiedRoleSelections', JSON.stringify(rolesSource));
+    localStorage.setItem('pendingFormData', JSON.stringify(pendingFormData));
+    localStorage.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData));
+    localStorage.setItem('copiedRoleSelections', JSON.stringify(normalized));
+    localStorage.setItem('copiedRoleSelectionsRaw', JSON.stringify(roleSelections || {}));
+    localStorage.setItem('copiedUserDetails', JSON.stringify({
+      id: userDetails?.id ?? null,
+      email: userDetails?.email ?? null,
+      employee_name: userDetails?.employee_name ?? null,
+      employee_id: userDetails?.employee_id ?? null,
+    }));
 
-    // Optional: include who we copied from
-    localStorage.setItem(
-      'copiedUserDetails',
-      JSON.stringify({
-        id: userDetails?.id ?? null,
-        email: userDetails?.email ?? null,
-      })
-    );
+    debugLog('📦 Saved copy context from UserRoleDetails:', {
+      pendingFormData,
+      normalizedRoleKeys: Object.keys(normalized)
+    });
 
-    // Go to the role selection page
+    // Go to the role selection page (default to accounting/procurement)
     navigate('/select-roles');
   };
 
@@ -125,7 +142,7 @@ function UserRoleDetails({ userDetails, roleSelections, onEditRoles }: UserRoleD
     const filteredEntries = trueBooleanEntries.filter(([key]) => !excludedKeys.includes(key));
     debugLog('🔍 Filtered boolean entries:', filteredEntries);
 
-    return filteredEntries.map(([key]) => key);
+    return filteredEntries.map(([key]) => toCamel(key));
   };
 
   // Get all string fields that have values
@@ -164,7 +181,8 @@ function UserRoleDetails({ userDetails, roleSelections, onEditRoles }: UserRoleD
     );
 
     debugLog('🔍 String field entries:', stringEntries);
-    return stringEntries;
+    // camelize keys for display
+    return stringEntries.map(([k, v]) => [toCamel(k), v] as [string, any]);
   };
 
   const activeBooleanRoles = getActiveBooleanRoles();
@@ -281,36 +299,6 @@ function UserRoleDetails({ userDetails, roleSelections, onEditRoles }: UserRoleD
                   </div>
                   <div>
                     <strong>String field values count:</strong> {stringFieldValues.length}
-                  </div>
-                  <div>
-                    <strong>Sample of boolean fields (first 10):</strong>
-                    <div className="ml-2 mt-1 max-h-32 overflow-y-auto">
-                      {roleSelections
-                        ? Object.entries(roleSelections)
-                            .filter(([, value]) => typeof value === 'boolean')
-                            .slice(0, 10)
-                            .map(([key, value]) => (
-                              <div key={key} className={value ? 'text-green-600' : 'text-gray-400'}>
-                                {key}: {value ? 'true' : 'false'}
-                              </div>
-                            ))
-                        : 'No data'}
-                    </div>
-                  </div>
-                  <div>
-                    <strong>Total boolean fields:</strong>{' '}
-                    {roleSelections
-                      ? Object.entries(roleSelections).filter(([, value]) => typeof value === 'boolean')
-                          .length
-                      : 0}
-                  </div>
-                  <div>
-                    <strong>True boolean fields:</strong>{' '}
-                    {roleSelections
-                      ? Object.entries(roleSelections).filter(
-                          ([, value]) => typeof value === 'boolean' && value === true
-                        ).length
-                      : 0}
                   </div>
                 </div>
               </details>
