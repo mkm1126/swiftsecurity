@@ -745,65 +745,85 @@ function SelectRolesPage() {
   useEffect(() => {
     (async () => {
       // Check for copy flow - require ALL three pieces of data to be present
-      const pendingFormDataRaw = localStorage.getItem('pendingFormData');
-      const copiedRoleSelectionsRaw = localStorage.getItem('copiedRoleSelections');
-      const copiedUserDetailsRaw = localStorage.getItem('copiedUserDetails');
-      const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
+      const pendingFormData = localStorage.getItem('pendingFormData');
+      const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+      const copiedUserDetails = localStorage.getItem('copiedUserDetails');
       
-      const isCopyFlow = Boolean(editingCopiedRoles && pendingFormDataRaw && copiedRoleSelectionsRaw && copiedUserDetailsRaw);
+      // ---- Copy-flow hydration (robust + no globals) -----------------------
+      try {
+        const rawForm = localStorage.getItem('pendingFormData');
+        const rawRoles = localStorage.getItem('copiedRoleSelections');
+        const rawUser  = localStorage.getItem('copiedUserDetails');
 
-      if (isCopyFlow) {
-        setIsEditingCopiedRoles(true);
-        try {
-          const formData: CopyFlowForm = JSON.parse(pendingFormDataRaw!);
-          const roleData = JSON.parse(copiedRoleSelectionsRaw!);
-          setRequestDetails({ 
-            employee_name: formData.employeeName, 
-            agency_name: formData.agencyName, 
-            agency_code: formData.agencyCode, 
-            employee_id: formData.employeeId,
-            work_location: formData.workLocation || null,
-            phone: formData.phone || null,
-            email: formData.email || null,
-            start_date: formData.startDate,
-            position_number: formData.positionNumber || null,
-            job_title: formData.jobTitle || null,
-            superseded_employee_name: formData.supersededEmployeeName || null,
-            superseded_employee_id: formData.supersededEmployeeId || null,
-            approximate_copy: null,
-            is_non_employee: formData.isNonEmployee ?? false,
-          } as any);
-          // hydrate role selections
-          setRoleSelections(roleData);
-          setPendingFormData(formData);
-          setSelectedUser(JSON.parse(copiedUserDetailsRaw!));
-          
-          console.log('🔧 Copy flow - pendingFormData:', formData);
-          console.log('🔧 Copy flow - roleData:', roleData);
+        const safeParse = <T,>(s: string | null): T | null => {
+          if (!s) return null;
+          try { return JSON.parse(s) as T; } catch { return null; }
+        };
 
-          // mark hydration complete
-          setTimeout(() => {
-            isHydratingRef.current = false;
-          }, 0);
-          return;
-        } catch (err) {
-          console.error('❌ Copy flow - failed to parse payload', { err, pendingFormDataRaw, copiedRoleSelectionsRaw, copiedUserDetailsRaw });
-          toast.error('Error loading copied user data');
-          // Clean up invalid copy flow data
-          localStorage.removeItem('editingCopiedRoles');
-          localStorage.removeItem('pendingFormData');
-          localStorage.removeItem('copiedRoleSelections');
-          localStorage.removeItem('copiedUserDetails');
+        const formData = safeParse<CopyFlowForm>(rawForm);
+        const roleData = safeParse<any>(rawRoles);
+        const userData = safeParse<any>(rawUser);
+
+        const editingCopiedRoles =
+          location?.state?.editingCopiedRoles === true ||
+          (formData && roleData && userData);
+
+        console.log('🔧 Copy flow - pendingFormData(form):', formData);
+        console.log('🔧 Copy flow - roleData:', roleData);
+        console.log('🔧 Copy flow - userData:', userData);
+
+        if (editingCopiedRoles && formData && roleData && userData) {
+          setIsEditingCopiedRoles(true);
+
+          // hydrate header/form identity fields
+          setRequestDetails((prev) => ({
+            ...prev,
+            startDate:     formData.startDate ?? prev.startDate ?? '',
+            employeeName:  formData.employeeName ?? prev.employeeName ?? '',
+            employeeId:    formData.employeeId ?? prev.employeeId ?? '',
+            email:         formData.email ?? prev.email ?? '',
+            agencyName:    formData.agencyName ?? prev.agencyName ?? '',
+            agencyCode:    formData.agencyCode ?? prev.agencyCode ?? '',
+            workLocation:  formData.workLocation ?? prev.workLocation ?? '',
+            supervisorName: formData.supervisorName ?? prev.supervisorName ?? '',
+            supervisorEmail: formData.supervisorEmail ?? prev.supervisorEmail ?? '',
+            phone:         formData.phone ?? prev.phone ?? '',
+            jobTitle:      formData.jobTitle ?? prev.jobTitle ?? '',
+          }));
+
+          // Also set pending form state used by the page
+          setPendingFormData((prev) => ({
+            ...prev,
+            startDate: formData.startDate ?? prev?.startDate ?? '',
+            employeeName: formData.employeeName ?? prev?.employeeName ?? '',
+            employeeId: formData.employeeId ?? prev?.employeeId ?? '',
+            email: formData.email ?? prev?.email ?? '',
+            agencyName: formData.agencyName ?? prev?.agencyName ?? '',
+            agencyCode: formData.agencyCode ?? prev?.agencyCode ?? '',
+            workLocation: formData.workLocation ?? prev?.workLocation ?? '',
+            supervisorName: formData.supervisorName ?? prev?.supervisorName ?? '',
+            supervisorEmail: formData.supervisorEmail ?? prev?.supervisorEmail ?? '',
+            phone: formData.phone ?? prev?.phone ?? '',
+            jobTitle: formData.jobTitle ?? prev?.jobTitle ?? '',
+          }));
+
+          // hydrate role checkboxes and strings (stored either nested or flat)
+          const dataSource = roleData?.role_selection_json ?? roleData ?? null;
+          setRoleSelectionFromJson(dataSource);
+
+          // make sure route reflects copy-flow id if present
+          if (formData.requestId && idParam !== formData.requestId) {
+            navigate(`/select-roles/${formData.requestId}`, { replace: true });
+          }
+        } else {
+          setIsEditingCopiedRoles(false);
         }
-      } else {
-        // Clean up any partial copy flow data
-        if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
-          localStorage.removeItem('editingCopiedRoles');
-          localStorage.removeItem('pendingFormData');
-          localStorage.removeItem('copiedRoleSelections');
-          localStorage.removeItem('copiedUserDetails');
-        }
+      } catch (err) {
+        console.error('❌ Copy flow - failed to parse payload', err);
+        setIsEditingCopiedRoles(false);
       }
+      // -----------------------------------------------------------------------
+
 
       const stateRequestId = (location as any)?.state?.requestId;
       const effectiveId = stateRequestId || (idParam as string | null);
