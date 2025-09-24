@@ -681,7 +681,91 @@ function SelectRolesPage() {
         localStorage.setItem(draftKey(requestId), JSON.stringify(payload));
       } catch {}
     }, 300);
-    return () => clearTimeout(handle);
+    
+  // --- POLLING COPY-FLOW UPDATE EFFECT: applies copied roles if they appear in localStorage after mount ---
+  useEffect(() => {
+    let cancelled = false;
+
+    const applyFromLocalStorage = () => {
+      try {
+        const editing = localStorage.getItem('editingCopiedRoles') === 'true';
+        const rawCopied = localStorage.getItem('copiedRoleSelections');
+        const rawPending = localStorage.getItem('pendingFormData');
+
+        if (!editing || !rawCopied || cancelled) return false;
+
+        const copied = JSON.parse(rawCopied);
+        const pendingForm = rawPending ? JSON.parse(rawPending) : null;
+
+        const payload = (copied && typeof copied === 'object' && copied.role_selection_json && Object.keys(copied.role_selection_json || {}).length)
+          ? copied.role_selection_json
+          : copied;
+
+        if (!payload || typeof payload !== 'object') return false;
+
+        const entries = Object.entries(payload);
+        const booleansTrue = entries.filter(([_, v]) => typeof v === 'boolean' && v === true).map(([k]) => k);
+        const stringsNonEmpty = entries.filter(([_, v]) => typeof v === 'string' && v !== '') as [string, string][];
+
+        const mapKey = (k: string) => {
+          switch (k) {
+            case 'voucherEntry': return 'voucherEntry';
+            case 'apInquiryOnly': return 'apInquiryOnly';
+            case 'matchOverride': return 'matchOverride';
+            case 'maintenanceVoucherBuildErrors': return 'maintenanceVoucherBuildErrors';
+            default: return k;
+          }
+        };
+
+        booleansTrue.forEach((k) => {
+          const fk = mapKey(k);
+          try {
+            setValue(fk as any, true, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
+          } catch {}
+        });
+
+        stringsNonEmpty.forEach(([k, v]) => {
+          const fk = mapKey(k);
+          try {
+            setValue(fk as any, v as any, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
+          } catch {}
+        });
+
+        if (pendingForm && typeof pendingForm === 'object') {
+          if ((pendingForm as any).request_type) setValue('requestType' as any, (pendingForm as any).request_type as any, { shouldDirty: true });
+          if ((pendingForm as any).request_subtype) setValue('requestSubtype' as any, (pendingForm as any).request_subtype as any, { shouldDirty: true });
+          if ((pendingForm as any).home_business_unit) setValue('homeBusinessUnit' as any, (pendingForm as any).home_business_unit as any, { shouldDirty: true });
+          if ((pendingForm as any).other_business_units) setValue('otherBusinessUnits' as any, (pendingForm as any).other_business_units as any, { shouldDirty: true });
+        }
+
+        console.log('✅ Copy flow (poll) - applied selections and fields from localStorage.');
+        localStorage.setItem('selectRolesFromCopyApplied', 'true');
+        return true;
+      } catch (err) {
+        console.error('❌ Copy flow (poll) - parse/apply failed', err);
+        return false;
+      }
+    };
+
+    const alreadyApplied = localStorage.getItem('selectRolesFromCopyApplied') === 'true';
+    if (!alreadyApplied) {
+      // Try once immediately
+      if (!applyFromLocalStorage()) {
+        // else poll briefly for changes for up to ~10s
+        const start = Date.now();
+        const id = setInterval(() => {
+          if (cancelled) { clearInterval(id); return; }
+          const done = applyFromLocalStorage();
+          const tooLong = (Date.now() - start) > 10000;
+          if (done || tooLong) clearInterval(id);
+        }, 400);
+        return () => { cancelled = true; clearInterval(id); };
+      }
+    }
+
+    return () => { cancelled = true; };
+  }, [setValue]);
+return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestId, selectedRoles]); // watch the whole form
 
@@ -748,84 +832,58 @@ function SelectRolesPage() {
       const pendingFormData = localStorage.getItem('pendingFormData');
       const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+      const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
       
-      // ---- Copy-flow hydration (robust + no globals) -----------------------
-      const isCopyFlow = Boolean((location as any)?.state?.copiedUserDetails || (location as any)?.state?.copiedRoleSelections || (location as any)?.state?.pendingFormData || (location as any)?.state?.copy === true);
+      const isCopyFlow = editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
 
-      try {
-        const rawForm = localStorage.getItem('pendingFormData');
-        const rawRoles = localStorage.getItem('copiedRoleSelections');
-        const rawUser  = localStorage.getItem('copiedUserDetails');
-
-        const safeParse = <T,>(s: string | null): T | null => {
-          if (!s) return null;
-          try { return JSON.parse(s) as T; } catch { return null; }
-        };
-
-        const formData = safeParse<CopyFlowForm>(rawForm);
-        const roleData = safeParse<any>(rawRoles);
-        const userData = safeParse<any>(rawUser);
-
-        const editingCopiedRoles =
-          location?.state?.editingCopiedRoles === true ||
-          (formData && roleData && userData);
-
-        console.log('🔧 Copy flow - pendingFormData(form):', formData);
-        console.log('🔧 Copy flow - roleData:', roleData);
-        console.log('🔧 Copy flow - userData:', userData);
-
-        if (editingCopiedRoles && formData && roleData && userData) {
-          setIsEditingCopiedRoles(true);
-
-          // hydrate header/form identity fields
-          setRequestDetails((prev) => ({
-            ...prev,
-            startDate:     formData.startDate ?? prev.startDate ?? '',
-            employeeName:  formData.employeeName ?? prev.employeeName ?? '',
-            employeeId:    formData.employeeId ?? prev.employeeId ?? '',
-            email:         formData.email ?? prev.email ?? '',
-            agencyName:    formData.agencyName ?? prev.agencyName ?? '',
-            agencyCode:    formData.agencyCode ?? prev.agencyCode ?? '',
-            workLocation:  formData.workLocation ?? prev.workLocation ?? '',
-            supervisorName: formData.supervisorName ?? prev.supervisorName ?? '',
-            supervisorEmail: formData.supervisorEmail ?? prev.supervisorEmail ?? '',
-            phone:         formData.phone ?? prev.phone ?? '',
-            jobTitle:      formData.jobTitle ?? prev.jobTitle ?? '',
-          }));
-
-          // Also set pending form state used by the page
-          setPendingFormData((prev) => ({
-            ...prev,
-            startDate: formData.startDate ?? prev?.startDate ?? '',
-            employeeName: formData.employeeName ?? prev?.employeeName ?? '',
-            employeeId: formData.employeeId ?? prev?.employeeId ?? '',
-            email: formData.email ?? prev?.email ?? '',
-            agencyName: formData.agencyName ?? prev?.agencyName ?? '',
-            agencyCode: formData.agencyCode ?? prev?.agencyCode ?? '',
-            workLocation: formData.workLocation ?? prev?.workLocation ?? '',
-            supervisorName: formData.supervisorName ?? prev?.supervisorName ?? '',
-            supervisorEmail: formData.supervisorEmail ?? prev?.supervisorEmail ?? '',
-            phone: formData.phone ?? prev?.phone ?? '',
-            jobTitle: formData.jobTitle ?? prev?.jobTitle ?? '',
-          }));
-
-          // hydrate role checkboxes and strings (stored either nested or flat)
-          const dataSource = roleData?.role_selection_json ?? roleData ?? null;
-          setRoleSelectionFromJson(dataSource);
-
-          // make sure route reflects copy-flow id if present
-          if (formData.requestId && idParam !== formData.requestId) {
-            navigate(`/select-roles/${formData.requestId}`, { replace: true });
+      if (isCopyFlow) {
+        setIsEditingCopiedRoles(true);
+        try {
+          const formData: CopyFlowForm = JSON.parse(pendingFormData);
+          const roleData = JSON.parse(copiedRoleSelections);
+          setRequestDetails({ 
+            employee_name: formData.employeeName, 
+            agency_name: formData.agencyName, 
+            agency_code: formData.agencyCode 
+          });
+          
+          console.log('🔧 Copy flow - pendingFormData:', formData);
+          console.log('🔧 Copy flow - roleData:', roleData);
+          
+          // Map copied role data to form fields
+          if (roleData) {
+            Object.entries(roleData).forEach(([key, value]) => {
+              if (typeof value === 'boolean' && value === true) {
+                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+              } else if (typeof value === 'string' && value.trim()) {
+                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+              }
+            });
           }
-        } else {
-          setIsEditingCopiedRoles(false);
+          
+          // Mark hydration as complete
+          setTimeout(() => {
+            isHydratingRef.current = false;
+          }, 0);
+          return;
+        } catch (e) {
+          console.error('Error loading copy-flow data:', e);
+          toast.error('Error loading copied user data');
+          // Clean up invalid copy flow data
+          localStorage.removeItem('editingCopiedRoles');
+          localStorage.removeItem('pendingFormData');
+          localStorage.removeItem('copiedRoleSelections');
+          localStorage.removeItem('copiedUserDetails');
         }
-      } catch (err) {
-        console.error('❌ Copy flow - failed to parse payload', err);
-        setIsEditingCopiedRoles(false);
+      } else {
+        // Clean up any partial copy flow data
+        if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
+          localStorage.removeItem('editingCopiedRoles');
+          localStorage.removeItem('pendingFormData');
+          localStorage.removeItem('copiedRoleSelections');
+          localStorage.removeItem('copiedUserDetails');
+        }
       }
-      // -----------------------------------------------------------------------
-
 
       const stateRequestId = (location as any)?.state?.requestId;
       const effectiveId = stateRequestId || (idParam as string | null);
