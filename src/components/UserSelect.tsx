@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -23,28 +24,12 @@ interface UserSelectProps {
   required?: boolean;
   currentUser?: string | null;
   currentRequestId?: string | null;
-  formData?: any; // Current form data from parent component
+  formData?: any; // Current form data from parent component (new request in progress)
 }
 
 /** Utility: camelCase a snake_case key */
 function toCamel(key: string) {
-  return key.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
-}
-
-/** Utility: coerce home business unit to an array of strings */
-function coerceHomeBU(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter(Boolean).map(String);
-  }
-  if (typeof value === 'string') {
-    if (!value.trim()) return [];
-    if (value.includes(',')) {
-      return value.split(',').map(s => s.trim()).filter(Boolean);
-    }
-    return [value.trim()];
-  }
-  if (value == null) return [];
-  return [String(value)];
+  return key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
 /** Utility: deep map keys to camelCase (1 level is enough for our data) */
@@ -61,7 +46,6 @@ function camelizeKeys<T extends Record<string, any>>(obj: T | null | undefined):
 /** Build a normalized roles payload expected by SelectRolesPage.
  *  Prefers role_selection_json if present; falls back to top-level columns.
  *  Ensures camelCase keys and strips non-role metadata.
- *  Guarantees homeBusinessUnit is an array of strings.
  */
 function normalizeRoles(roleSelections: any): Record<string, any> {
   if (!roleSelections) return {};
@@ -87,13 +71,10 @@ function normalizeRoles(roleSelections: any): Record<string, any> {
     base.otherBusinessUnits = roleSelections.other_business_units;
   }
 
-  // ALWAYS coerce homeBusinessUnit into an array
-  base.homeBusinessUnit = coerceHomeBU(base.homeBusinessUnit);
-
   return base;
 }
 
-function UserSelect({ 
+export default function UserSelect({ 
   selectedUser, 
   onUserChange, 
   error, 
@@ -128,11 +109,11 @@ function UserSelect({
 
     // Guarantee the flags + keys that SelectRolesPage looks for
     localStorage.setItem('isCopyFlow', 'true');
-    localStorage.setItem('editingCopiedRoles', mode === 'editCopied' ? 'true' : 'true'); // preserve legacy flag
+    localStorage.setItem('editingCopiedRoles', mode === 'editCopied' ? 'true' : 'true'); // keep same flag used elsewhere
 
     // Save both a raw and normalized version to be future-proof
     localStorage.setItem('pendingFormData', JSON.stringify(pendingFormData));
-    localStorage.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData)); // some pages referenced this earlier
+    localStorage.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData)); // legacy compatibility
     localStorage.setItem('copiedRoleSelectionsRaw', JSON.stringify(roleSelections || {}));
     localStorage.setItem('copiedRoleSelections', JSON.stringify(normalizedRoles));
 
@@ -157,19 +138,69 @@ function UserSelect({
     return { normalizedRoles };
   };
 
+  const buildPendingFormData = (): any => {
+    // Construct a "safe" pending form model so SelectRolesPage never sees nulls for required columns
+    // Keep "Requested For" (employeeName/Id) EMPTY so it stays the current request's user.
+    const fallback = (v: any, def: any) => (v === null || v === undefined || v === '') ? def : v;
+
+    // Try to carry submitter + agency from the in-progress form if present
+    const agencyName = fallback(formData?.agencyName, 'UNKNOWN');
+    const agencyCode = fallback(formData?.agencyCode, '');
+    const submitterName = fallback(formData?.submitterName, '');
+    const submitterEmail = fallback(formData?.submitterEmail, '');
+
+    // Preserve Home BU/Other BUs if the form already has them filled (e.g., when re-copying)
+    const homeBusinessUnit = fallback(formData?.homeBusinessUnit, '');
+    const otherBusinessUnits = fallback(formData?.otherBusinessUnits, '');
+
+    return {
+      // Keep Requested For blank so the current user stays intact
+      startDate: fallback(formData?.startDate, new Date().toISOString().split('T')[0]),
+      employeeName: '', // do not override current request's "Requested For"
+      employeeId: '',
+      isNonEmployee: fallback(formData?.isNonEmployee, false),
+      workLocation: fallback(formData?.workLocation, ''),
+      workPhone: fallback(formData?.workPhone, ''),
+      email: fallback(formData?.email, ''),
+
+      // These MUST be present to avoid DB not-null errors on insert
+      agencyName,
+      agencyCode,
+
+      // Submitter (keep current submitter)
+      submitterName,
+      submitterEmail,
+
+      // Supervisor + Security Admin (keep current selection)
+      supervisorName: fallback(formData?.supervisorName, ''),
+      supervisorUsername: fallback(formData?.supervisorUsername, ''),
+      securityAdminName: fallback(formData?.securityAdminName, ''),
+      securityAdminUsername: fallback(formData?.securityAdminUsername, ''),
+
+      // Area directors – leave blank (will be set by area page if needed)
+      elmKeyAdmin: fallback(formData?.elmKeyAdmin, ''),
+      elmKeyAdminUsername: fallback(formData?.elmKeyAdminUsername, ''),
+      hrDirector: fallback(formData?.hrDirector, ''),
+      hrDirectorEmail: fallback(formData?.hrDirectorEmail, ''),
+      accountingDirector: fallback(formData?.accountingDirector, ''),
+      accountingDirectorUsername: fallback(formData?.accountingDirectorUsername, ''),
+
+      // HR-specific fields (keep current)
+      hrMainframeLogonId: fallback(formData?.hrMainframeLogonId, ''),
+      hrViewStatewide: fallback(formData?.hrViewStatewide, false),
+
+      // BU fields (keep current if present; roles normalize will also set these)
+      homeBusinessUnit,
+      otherBusinessUnits,
+    };
+  };
+
   const handleEditRoles = () => {
     if (!selectedUser || !userDetails) {
       console.error('No user selected or user details not loaded');
       return;
     }
-
-    // Prefer live form values from parent; fall back to main form draft in localStorage.
-    const draftFromLS = (() => {
-      try { return JSON.parse(localStorage.getItem('formData') || '{}'); }
-      catch { return {}; }
-    })();
-    const currentFormData = { ...(draftFromLS || {}), ...(formData || {}) };
-
+    const currentFormData = buildPendingFormData();
     const { normalizedRoles } = persistCopyContext({
       pendingFormData: currentFormData,
       roleSelections,
@@ -187,47 +218,7 @@ function UserSelect({
       return;
     }
 
-    // Prefer live form values from parent; fall back to main form draft in localStorage.
-    const draftFromLS = (() => {
-      try { return JSON.parse(localStorage.getItem('formData') || '{}'); }
-      catch { return {}; }
-    })();
-    const base = { ...(draftFromLS || {}), ...(formData || {}) };
-
-    // Build complete form data for the copy flow - ensure required fields are present.
-    // IMPORTANT: Keep "Requested For" (employee*) and "Submitted By" from the CURRENT form.
-    const completeFormData = {
-      // Requested For (from current form)
-      startDate: base.startDate || new Date().toISOString().split('T')[0],
-      employeeName: base.employeeName || '',
-      employeeId: base.employeeId || '',
-      isNonEmployee: base.isNonEmployee ?? false,
-      workLocation: base.workLocation || '',
-      workPhone: base.workPhone || '',
-      email: base.email || '',
-
-      // Submitted By (from current form / current user)
-      submitterName: base.submitterName || base.currentUserName || '',
-      submitterEmail: base.submitterEmail || base.currentUserEmail || '',
-
-      // Supervisor / Security Admin (keep current form)
-      supervisorName: base.supervisorName || '',
-      supervisorUsername: base.supervisorUsername || '',
-      securityAdminName: base.securityAdminName || '',
-      securityAdminUsername: base.securityAdminUsername || '',
-
-      // Area directors - copy from the prior request if available
-      elmKeyAdmin: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_name || base.elmKeyAdmin || '',
-      elmKeyAdminUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_email || base.elmKeyAdminUsername || '',
-      hrDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_name || base.hrDirector || '',
-      hrDirectorEmail: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_email || base.hrDirectorEmail || '',
-      accountingDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_name || base.accountingDirector || '',
-      accountingDirectorUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_email || base.accountingDirectorUsername || '',
-
-      // HR-specific fields (keep current form values when present)
-      hrMainframeLogonId: base.hrMainframeLogonId || '',
-      hrViewStatewide: base.hrViewStatewide ?? false,
-    };
+    const completeFormData = buildPendingFormData();
 
     const { normalizedRoles } = persistCopyContext({
       pendingFormData: completeFormData,
@@ -241,9 +232,7 @@ function UserSelect({
     navigate(goToCorrectArea(userDetails));
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
   useEffect(() => {
     if (selectedUser?.request_id) {
@@ -264,6 +253,8 @@ function UserSelect({
           employee_name, 
           employee_id, 
           email,
+          agency_name,
+          agency_code,
           security_areas (
             area_type,
             director_name,
@@ -402,6 +393,7 @@ function UserSelect({
                 userDetails={userDetails} 
                 roleSelections={roleSelections}
                 onEditRoles={handleEditRoles}
+                hideActionButtons // ensure top buttons are hidden (you already have bottom buttons)
               />
               <div className="mt-4 flex gap-2">
                 <button
@@ -423,6 +415,4 @@ function UserSelect({
       )}
     </div>
   );
-} 
-
-export default UserSelect;
+}
