@@ -23,12 +23,28 @@ interface UserSelectProps {
   required?: boolean;
   currentUser?: string | null;
   currentRequestId?: string | null;
-  formData?: any; // Current form data from parent component (the NEW request being filled out)
+  formData?: any; // Current form data from parent component
 }
 
 /** Utility: camelCase a snake_case key */
 function toCamel(key: string) {
-  return key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+  return key.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
+}
+
+/** Utility: coerce home business unit to an array of strings */
+function coerceHomeBU(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).map(String);
+  }
+  if (typeof value === 'string') {
+    if (!value.trim()) return [];
+    if (value.includes(',')) {
+      return value.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [value.trim()];
+  }
+  if (value == null) return [];
+  return [String(value)];
 }
 
 /** Utility: deep map keys to camelCase (1 level is enough for our data) */
@@ -45,7 +61,7 @@ function camelizeKeys<T extends Record<string, any>>(obj: T | null | undefined):
 /** Build a normalized roles payload expected by SelectRolesPage.
  *  Prefers role_selection_json if present; falls back to top-level columns.
  *  Ensures camelCase keys and strips non-role metadata.
- *  Coerces multi-selects into arrays (notably homeBusinessUnit).
+ *  Guarantees homeBusinessUnit is an array of strings.
  */
 function normalizeRoles(roleSelections: any): Record<string, any> {
   if (!roleSelections) return {};
@@ -71,17 +87,8 @@ function normalizeRoles(roleSelections: any): Record<string, any> {
     base.otherBusinessUnits = roleSelections.other_business_units;
   }
 
-  // ---- Coerce Home Business Unit into ARRAY expected by SelectRolesPage ----
-  // Source could be a single string like "G0201G0202G0203" or CSV; ensure `string[]`
-  const hbu = base.homeBusinessUnit;
-  if (typeof hbu === 'string') {
-    const arr = hbu.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
-    base.homeBusinessUnit = arr.length ? arr : [];
-  } else if (Array.isArray(hbu)) {
-    base.homeBusinessUnit = hbu.filter(Boolean);
-  } else if (hbu == null) {
-    base.homeBusinessUnit = [];
-  }
+  // ALWAYS coerce homeBusinessUnit into an array
+  base.homeBusinessUnit = coerceHomeBU(base.homeBusinessUnit);
 
   return base;
 }
@@ -108,7 +115,6 @@ function UserSelect({
     if (securityAreas.some((a: any) => a.area_type === 'epm_data_warehouse')) return '/epm-dwh-roles';
     if (securityAreas.some((a: any) => a.area_type === 'hr_payroll')) return '/hr-payroll-roles';
     return '/select-roles';
-    // accounting/procurement falls back to /select-roles in this app
   };
 
   const persistCopyContext = (payload: {
@@ -122,7 +128,7 @@ function UserSelect({
 
     // Guarantee the flags + keys that SelectRolesPage looks for
     localStorage.setItem('isCopyFlow', 'true');
-    localStorage.setItem('editingCopiedRoles', mode === 'editCopied' ? 'true' : 'true'); // keep same flag used elsewhere
+    localStorage.setItem('editingCopiedRoles', mode === 'editCopied' ? 'true' : 'true'); // preserve legacy flag
 
     // Save both a raw and normalized version to be future-proof
     localStorage.setItem('pendingFormData', JSON.stringify(pendingFormData));
@@ -156,8 +162,14 @@ function UserSelect({
       console.error('No user selected or user details not loaded');
       return;
     }
-    // Keep the NEW request's person + submitter info from current formData
-    const currentFormData = formData || {};
+
+    // Prefer live form values from parent; fall back to main form draft in localStorage.
+    const draftFromLS = (() => {
+      try { return JSON.parse(localStorage.getItem('formData') || '{}'); }
+      catch { return {}; }
+    })();
+    const currentFormData = { ...(draftFromLS || {}), ...(formData || {}) };
+
     const { normalizedRoles } = persistCopyContext({
       pendingFormData: currentFormData,
       roleSelections,
@@ -175,43 +187,46 @@ function UserSelect({
       return;
     }
 
-    // Build complete form data for the copy flow.
-    // IMPORTANT: Keep the NEW "Requested For" and "Submitted By" from the current form,
-    // NOT from the user we're copying.
+    // Prefer live form values from parent; fall back to main form draft in localStorage.
+    const draftFromLS = (() => {
+      try { return JSON.parse(localStorage.getItem('formData') || '{}'); }
+      catch { return {}; }
+    })();
+    const base = { ...(draftFromLS || {}), ...(formData || {}) };
+
+    // Build complete form data for the copy flow - ensure required fields are present.
+    // IMPORTANT: Keep "Requested For" (employee*) and "Submitted By" from the CURRENT form.
     const completeFormData = {
-      // Requested For (keep what the requestor already entered)
-      startDate: formData?.startDate || new Date().toISOString().split('T')[0],
-      employeeName: formData?.employeeName || '',
-      employeeId: formData?.employeeId || '',
-      isNonEmployee: formData?.isNonEmployee ?? false,
-      workLocation: formData?.workLocation || '',
-      workPhone: formData?.workPhone || '',
-      email: formData?.email || '',
-      agencyName: formData?.agencyName || '',
-      agencyCode: formData?.agencyCode || '',
-      justification: formData?.justification || '',
+      // Requested For (from current form)
+      startDate: base.startDate || new Date().toISOString().split('T')[0],
+      employeeName: base.employeeName || '',
+      employeeId: base.employeeId || '',
+      isNonEmployee: base.isNonEmployee ?? false,
+      workLocation: base.workLocation || '',
+      workPhone: base.workPhone || '',
+      email: base.email || '',
 
-      // Submitter (stick with the current user / form values)
-      submitterName: formData?.submitterName || currentUser || '',
-      submitterEmail: formData?.submitterEmail || formData?.currentUserEmail || '',
+      // Submitted By (from current form / current user)
+      submitterName: base.submitterName || base.currentUserName || '',
+      submitterEmail: base.submitterEmail || base.currentUserEmail || '',
 
-      // Supervisor / Security admin (preserve what's in the current form)
-      supervisorName: formData?.supervisorName || '',
-      supervisorUsername: formData?.supervisorUsername || '',
-      securityAdminName: formData?.securityAdminName || '',
-      securityAdminUsername: formData?.securityAdminUsername || '',
+      // Supervisor / Security Admin (keep current form)
+      supervisorName: base.supervisorName || '',
+      supervisorUsername: base.supervisorUsername || '',
+      securityAdminName: base.securityAdminName || '',
+      securityAdminUsername: base.securityAdminUsername || '',
 
-      // Area directors: it *is* helpful to copy these from the prior request
-      elmKeyAdmin: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_name || formData?.elmKeyAdmin || '',
-      elmKeyAdminUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_email || formData?.elmKeyAdminUsername || '',
-      hrDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_name || formData?.hrDirector || '',
-      hrDirectorEmail: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_email || formData?.hrDirectorEmail || '',
-      accountingDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_name || formData?.accountingDirector || '',
-      accountingDirectorUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_email || formData?.accountingDirectorUsername || '',
+      // Area directors - copy from the prior request if available
+      elmKeyAdmin: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_name || base.elmKeyAdmin || '',
+      elmKeyAdminUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_email || base.elmKeyAdminUsername || '',
+      hrDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_name || base.hrDirector || '',
+      hrDirectorEmail: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_email || base.hrDirectorEmail || '',
+      accountingDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_name || base.accountingDirector || '',
+      accountingDirectorUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_email || base.accountingDirectorUsername || '',
 
-      // HR-specific (keep whatever the NEW form already has)
-      hrMainframeLogonId: formData?.hrMainframeLogonId || '',
-      hrViewStatewide: formData?.hrViewStatewide ?? false,
+      // HR-specific fields (keep current form values when present)
+      hrMainframeLogonId: base.hrMainframeLogonId || '',
+      hrViewStatewide: base.hrViewStatewide ?? false,
     };
 
     const { normalizedRoles } = persistCopyContext({
@@ -386,7 +401,7 @@ function UserSelect({
               <UserRoleDetails 
                 userDetails={userDetails} 
                 roleSelections={roleSelections}
-                // Removed inline buttons from the details card; use bottom buttons
+                onEditRoles={handleEditRoles}
               />
               <div className="mt-4 flex gap-2">
                 <button
