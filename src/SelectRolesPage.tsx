@@ -1,9 +1,5 @@
 // src/SelectRolesPage.tsx
 // Complete version with all role selection tables and copy user functionality
-// Fixes: invalid hook call caused by nested useEffect + dependency issues.
-// - Debounced local-draft saver is now its own effect with cleanup.
-// - Copy-flow polling is a separate sibling effect (not nested).
-// - Autosave-to-stable storage effect depends on `selectedRoles` (not `watch()`).
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -55,7 +51,7 @@ function SelectRolesPage() {
   // Gate autosave until all hydration layers (stable local, DB, id-scoped local) finish
   const isHydratingRef = useRef(true);
 
-  // Helper: snake_case <-> camelCase
+  // Helper: snake_case <-> camelCase (hoisted function declarations for safe use anywhere)
   function snakeToCamel(s: string) {
     return s.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
   }
@@ -87,6 +83,7 @@ function SelectRolesPage() {
       for (const [k, v] of Object.entries(data)) {
         const isText = /Justification$/.test(k);
         const typed: any = isText ? String((v as any) ?? '') : v;
+        // RHF will store unregistered field values until the input registers
         setValue(k as any, typed as any, { shouldDirty: false });
       }
 
@@ -187,14 +184,17 @@ function SelectRolesPage() {
   // Strip leading two-letter prefixes (e.g., "ss_", "sc_") — used only for legacy fallback mapping
   const strip2 = (k: string) => k.replace(/^[a-z]{2}_/, '');
 
-  // ✅ Normalize for DB write: keep only true boolean flags; preserve non-boolean as-is
+  // ✅ Normalize for DB write:
+  // - Keep original snake_case keys (including 2-letter prefixes) for boolean flags
+  // - Only persist TRUE flags; drop false/unknown
+  // - Preserve non-boolean fields as-is
   function normalizeRoleFlagsTrueOnly<T extends Record<string, any>>(flags: T) {
     const out: Record<string, any> = {};
     for (const [key, val] of Object.entries(flags)) {
       if (typeof val === 'boolean') {
-        if (val === true) out[key] = true;
+        if (val === true) out[key] = true; // keep exact key name (prefix preserved)
       } else {
-        out[key] = val;
+        out[key] = val; // keep non-boolean fields (strings/arrays/nulls)
       }
     }
     return out as T;
@@ -212,7 +212,7 @@ function SelectRolesPage() {
       .filter((s) => s.length === codeLen);
   };
 
-  // Build a payload that matches the updated schema (TEXT[] where applicable)
+  // Build a single payload that matches your updated schema (TEXT[] where applicable)
   const buildRoleSelectionData = (
     request_id: string,
     data: SecurityRoleSelection,
@@ -265,7 +265,7 @@ function SelectRolesPage() {
 
     const toOrNull = (arr: string[]) => (arr.length ? arr : null);
 
-    // Extra persisted flags (kept true-only later)
+    // Auto-generated: persist additional Accounting/Procurement checkbox flags
     const EXTRA_ACCOUNTING_PROCUREMENT_FLAGS = {
       needs_daily_receipts_yes: (data as any).needsDailyReceiptsYes || false,
       needs_daily_receipts_no: (data as any).needsDailyReceiptsNo || false,
@@ -483,6 +483,7 @@ function SelectRolesPage() {
   const [saving, setSaving] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
   const [requestDetails, setRequestDetails] = useState<any>(null);
+  const [loadingExistingData, setLoadingExistingData] = useState(false);
   const [availableBusinessUnits, setAvailableBusinessUnits] = useState<any[]>([]);
   const [hasExistingDbSelections, setHasExistingDbSelections] = useState(false);
   const [restoredFromLocalStorage, setRestoredFromLocalStorage] = useState(false);
@@ -599,6 +600,7 @@ function SelectRolesPage() {
   // Fetch existing saved selections and hydrate the form (for Edit flow)
   const fetchExistingSelections = async (id: string) => {
     try {
+      // Renamed to be more specific about what it does
       const { data, error } = await supabase
         .from('security_role_selections')
         .select('*')
@@ -610,6 +612,7 @@ function SelectRolesPage() {
       if (data) {        
         console.log('📡 Found existing selections in database:', data);
 
+        // Mark that we found existing selections in the database
         setHasExistingDbSelections(true);
         
         for (const [k, v] of Object.entries(data)) {
@@ -617,18 +620,19 @@ function SelectRolesPage() {
         
           // Arrays from DB (TEXT[]) → comma list for textareas
           if (Array.isArray(v)) {
-            const camel = snakeToCamel(k);
+            const camel = snakeToCamel(k); // e.g., ap_voucher_approver_1_route_controls -> apVoucherApprover1RouteControls
             setValue(camel as any, v.join(', '), { shouldDirty: false });
             continue;
           }
         
           if (typeof v === 'boolean') {
+            // Only set truthy flags – mirrors how you write to DB (true-only)
             if (v === true) {
-              const camel = snakeToCamel(k);
+              const camel = snakeToCamel(k);        // e.g., sc_contract_administrator -> scContractAdministrator
               setValue(camel as any, true as any, { shouldDirty: false });
         
               // Legacy fallback: if DB used a two-letter prefix, also set the suffix-mapped key just in case
-              const suffixCamel = snakeToCamel(strip2(k));
+              const suffixCamel = snakeToCamel(strip2(k)); // e.g., contract_administrator -> contractAdministrator
               if (suffixCamel !== camel) {
                 setValue(suffixCamel as any, true as any, { shouldDirty: false });
               }
@@ -653,6 +657,7 @@ function SelectRolesPage() {
           clearErrors('homeBusinessUnit' as any);
         }
         
+        // 👇 Force RHF to broadcast the loaded values to any inputs that only read once at mount
         setTimeout(() => {
           const snap = getValues();
           reset(snap);
@@ -667,7 +672,7 @@ function SelectRolesPage() {
 
   // --- local draft persistence (so Back -> return keeps selections) ---------
 
-  // Save a local draft (debounced) — SEPARATE effect with cleanup
+  // Save a local draft (debounced)
   useEffect(() => {
     if (!requestId) return;
     const handle = setTimeout(() => {
@@ -676,11 +681,8 @@ function SelectRolesPage() {
         localStorage.setItem(draftKey(requestId), JSON.stringify(payload));
       } catch {}
     }, 300);
-    return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestId, selectedRoles]);
-
-  // --- POLLING COPY-FLOW UPDATE EFFECT ---
+    
+  // --- POLLING COPY-FLOW UPDATE EFFECT: applies copied roles if they appear in localStorage after mount ---
   useEffect(() => {
     let cancelled = false;
 
@@ -747,7 +749,9 @@ function SelectRolesPage() {
 
     const alreadyApplied = localStorage.getItem('selectRolesFromCopyApplied') === 'true';
     if (!alreadyApplied) {
+      // Try once immediately
       if (!applyFromLocalStorage()) {
+        // else poll briefly for changes for up to ~10s
         const start = Date.now();
         const id = setInterval(() => {
           if (cancelled) { clearInterval(id); return; }
@@ -761,6 +765,9 @@ function SelectRolesPage() {
 
     return () => { cancelled = true; };
   }, [setValue]);
+return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestId, selectedRoles]); // watch the whole form
 
   // Also save on pagehide as a fallback
   useEffect(() => {
@@ -780,7 +787,7 @@ function SelectRolesPage() {
     if (!requestDetails || isHydratingRef.current || isEditingCopiedRoles) return;
     
     const timeoutId = setTimeout(() => {
-      const formData = selectedRoles;
+      const formData = watch();
       if (!formData || Object.keys(formData).length === 0) return;
       const sk = stableStorageKey();
       if (!sk) return;
@@ -788,7 +795,7 @@ function SelectRolesPage() {
       console.log('💾 Auto-saving Select Roles form data:', { storageKey: sk, formData });
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [selectedRoles, requestDetails, isEditingCopiedRoles]);
+  }, [watch(), requestDetails, isEditingCopiedRoles]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -832,8 +839,8 @@ function SelectRolesPage() {
       if (isCopyFlow) {
         setIsEditingCopiedRoles(true);
         try {
-          const formData: CopyFlowForm = JSON.parse(pendingFormData as string);
-          const roleData = JSON.parse(copiedRoleSelections as string);
+          const formData: CopyFlowForm = JSON.parse(pendingFormData);
+          const roleData = JSON.parse(copiedRoleSelections);
           setRequestDetails({ 
             employee_name: formData.employeeName, 
             agency_name: formData.agencyName, 
@@ -843,16 +850,35 @@ function SelectRolesPage() {
           console.log('🔧 Copy flow - pendingFormData:', formData);
           console.log('🔧 Copy flow - roleData:', roleData);
           
+          // Map copied role data to form fields
           if (roleData) {
             Object.entries(roleData).forEach(([key, value]) => {
               if (typeof value === 'boolean' && value === true) {
                 setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
-              } else if (typeof value === 'string' && (value as string).trim()) {
+              } else if (typeof value === 'string' && value.trim()) {
                 setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
               }
+          // Handle array-like/multi-select fields explicitly
+          const coerceToArray = (val: any): string[] => {
+            if (Array.isArray(val)) return val.filter(Boolean);
+            if (typeof val === 'string') {
+              try {
+                const parsed = JSON.parse(val);
+                if (Array.isArray(parsed)) return parsed.filter(Boolean);
+              } catch {}
+              return val.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+            }
+            return [];
+          };
+          const hbuRaw: any = (roleData as any)?.homeBusinessUnit ?? (roleData as any)?.home_business_unit;
+          const hbuArr = coerceToArray(hbuRaw);
+          if (hbuArr.length) {
+            setValue('homeBusinessUnit' as any, hbuArr as any, { shouldDirty: false });
+          }
             });
           }
           
+          // Mark hydration as complete
           setTimeout(() => {
             isHydratingRef.current = false;
           }, 0);
@@ -860,12 +886,14 @@ function SelectRolesPage() {
         } catch (e) {
           console.error('Error loading copy-flow data:', e);
           toast.error('Error loading copied user data');
+          // Clean up invalid copy flow data
           localStorage.removeItem('editingCopiedRoles');
           localStorage.removeItem('pendingFormData');
           localStorage.removeItem('copiedRoleSelections');
           localStorage.removeItem('copiedUserDetails');
         }
       } else {
+        // Clean up any partial copy flow data
         if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
           localStorage.removeItem('editingCopiedRoles');
           localStorage.removeItem('pendingFormData');
@@ -944,7 +972,7 @@ function SelectRolesPage() {
         const d: CopyFlowForm = JSON.parse(pendingFormData);
         const pocUser = localStorage.getItem('pocUserName');
 
-        // Ensure start_date is properly set
+        // Ensure start_date is properly set - this is critical for the database constraint
         const startDate = d.startDate || new Date().toISOString().split('T')[0];
         
         console.log('🔧 Copy flow - creating request with data:', {
@@ -1023,10 +1051,12 @@ function SelectRolesPage() {
           return;
         }
 
+        // Build payload with arrays parsed for TEXT[] columns
         const rawPayload = buildRoleSelectionData(requestId, data, {
           homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
         });
 
+        // Coerce any sneaky "on"/["on","on"] values → booleans
         const cleaned = coerceBooleansDeep(rawPayload);
         const normalized = normalizeRoleFlagsTrueOnly(cleaned);
 
@@ -1036,6 +1066,7 @@ function SelectRolesPage() {
 
         if (error) throw error;
 
+        // ✅ Clear local draft on successful save
         try {
           localStorage.removeItem(draftKey(requestId));
         } catch {}
@@ -1129,7 +1160,7 @@ function SelectRolesPage() {
                       <UserSelect
                         selectedUser={selectedUser}
                         onUserChange={handleUserChange}
-                        formData={selectedRoles}
+                        formData={watch()}
                       />
                     </div>
                   </div>
