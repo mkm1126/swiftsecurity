@@ -23,7 +23,7 @@ interface UserSelectProps {
   required?: boolean;
   currentUser?: string | null;
   currentRequestId?: string | null;
-  formData?: any; // Current form data from parent component
+  formData?: any; // Current form data from parent component (the NEW request being filled out)
 }
 
 /** Utility: camelCase a snake_case key */
@@ -45,6 +45,7 @@ function camelizeKeys<T extends Record<string, any>>(obj: T | null | undefined):
 /** Build a normalized roles payload expected by SelectRolesPage.
  *  Prefers role_selection_json if present; falls back to top-level columns.
  *  Ensures camelCase keys and strips non-role metadata.
+ *  Coerces multi-selects into arrays (notably homeBusinessUnit).
  */
 function normalizeRoles(roleSelections: any): Record<string, any> {
   if (!roleSelections) return {};
@@ -68,6 +69,18 @@ function normalizeRoles(roleSelections: any): Record<string, any> {
   }
   if (roleSelections?.other_business_units && !base.otherBusinessUnits) {
     base.otherBusinessUnits = roleSelections.other_business_units;
+  }
+
+  // ---- Coerce Home Business Unit into ARRAY expected by SelectRolesPage ----
+  // Source could be a single string like "G0201G0202G0203" or CSV; ensure `string[]`
+  const hbu = base.homeBusinessUnit;
+  if (typeof hbu === 'string') {
+    const arr = hbu.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+    base.homeBusinessUnit = arr.length ? arr : [];
+  } else if (Array.isArray(hbu)) {
+    base.homeBusinessUnit = hbu.filter(Boolean);
+  } else if (hbu == null) {
+    base.homeBusinessUnit = [];
   }
 
   return base;
@@ -95,6 +108,7 @@ function UserSelect({
     if (securityAreas.some((a: any) => a.area_type === 'epm_data_warehouse')) return '/epm-dwh-roles';
     if (securityAreas.some((a: any) => a.area_type === 'hr_payroll')) return '/hr-payroll-roles';
     return '/select-roles';
+    // accounting/procurement falls back to /select-roles in this app
   };
 
   const persistCopyContext = (payload: {
@@ -142,6 +156,7 @@ function UserSelect({
       console.error('No user selected or user details not loaded');
       return;
     }
+    // Keep the NEW request's person + submitter info from current formData
     const currentFormData = formData || {};
     const { normalizedRoles } = persistCopyContext({
       pendingFormData: currentFormData,
@@ -160,43 +175,43 @@ function UserSelect({
       return;
     }
 
-    // Build complete form data for the copy flow - ensure required fields are present
+    // Build complete form data for the copy flow.
+    // IMPORTANT: Keep the NEW "Requested For" and "Submitted By" from the current form,
+    // NOT from the user we're copying.
     const completeFormData = {
-      // Employee details (copied user)
-      startDate: formData?.startDate || userDetails.start_date || new Date().toISOString().split('T')[0],
-      employeeName: userDetails.employee_name || '',
-      employeeId: userDetails.employee_id || '',
-      isNonEmployee: userDetails.is_non_employee || false,
-      workLocation: userDetails.work_location || '',
-      workPhone: userDetails.work_phone || '',
-      email: userDetails.email || '',
-      agencyName: userDetails.agency_name || '',
-      agencyCode: userDetails.agency_code || '',
-      justification: userDetails.justification || '',
+      // Requested For (keep what the requestor already entered)
+      startDate: formData?.startDate || new Date().toISOString().split('T')[0],
+      employeeName: formData?.employeeName || '',
+      employeeId: formData?.employeeId || '',
+      isNonEmployee: formData?.isNonEmployee ?? false,
+      workLocation: formData?.workLocation || '',
+      workPhone: formData?.workPhone || '',
+      email: formData?.email || '',
+      agencyName: formData?.agencyName || '',
+      agencyCode: formData?.agencyCode || '',
+      justification: formData?.justification || '',
 
-      // Submitter details (stay as current requestor)
-      submitterName: formData?.submitterName || '',
-      submitterEmail: formData?.submitterEmail || '',
+      // Submitter (stick with the current user / form values)
+      submitterName: formData?.submitterName || currentUser || '',
+      submitterEmail: formData?.submitterEmail || formData?.currentUserEmail || '',
 
-      // Supervisor details (stay as current selection)
+      // Supervisor / Security admin (preserve what's in the current form)
       supervisorName: formData?.supervisorName || '',
       supervisorUsername: formData?.supervisorUsername || '',
-
-      // Security admin details
       securityAdminName: formData?.securityAdminName || '',
       securityAdminUsername: formData?.securityAdminUsername || '',
 
-      // Area-specific director details (from the copied user's request)
-      elmKeyAdmin: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_name || '',
-      elmKeyAdminUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_email || '',
-      hrDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_name || '',
-      hrDirectorEmail: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_email || '',
-      accountingDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_name || '',
-      accountingDirectorUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_email || '',
+      // Area directors: it *is* helpful to copy these from the prior request
+      elmKeyAdmin: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_name || formData?.elmKeyAdmin || '',
+      elmKeyAdminUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'elm')?.director_email || formData?.elmKeyAdminUsername || '',
+      hrDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_name || formData?.hrDirector || '',
+      hrDirectorEmail: userDetails.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_email || formData?.hrDirectorEmail || '',
+      accountingDirector: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_name || formData?.accountingDirector || '',
+      accountingDirectorUsername: userDetails.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_email || formData?.accountingDirectorUsername || '',
 
-      // HR-specific fields (from copied user)
-      hrMainframeLogonId: userDetails.hr_mainframe_logon_id || '',
-      hrViewStatewide: userDetails.hr_view_statewide || false,
+      // HR-specific (keep whatever the NEW form already has)
+      hrMainframeLogonId: formData?.hrMainframeLogonId || '',
+      hrViewStatewide: formData?.hrViewStatewide ?? false,
     };
 
     const { normalizedRoles } = persistCopyContext({
@@ -250,7 +265,7 @@ function UserSelect({
       log('All users fetched from approved/completed requests:', data);
 
       // Dedup by employee_id
-      const uniqueUsers = data.reduce((acc: User[], current: any) => {
+      const uniqueUsers = (data || []).reduce((acc: User[], current: any) => {
         const exists = acc.find(u => u.employee_id === current.employee_id);
         if (!exists) {
           acc.push({
@@ -371,7 +386,7 @@ function UserSelect({
               <UserRoleDetails 
                 userDetails={userDetails} 
                 roleSelections={roleSelections}
-                onEditRoles={handleEditRoles}
+                // Removed inline buttons from the details card; use bottom buttons
               />
               <div className="mt-4 flex gap-2">
                 <button
