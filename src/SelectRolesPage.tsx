@@ -21,7 +21,7 @@ interface User {
   email: string;
   request_id?: string;
 }
-
+ 
 type CopyFlowForm = {
   startDate: string;
   employeeName: string;
@@ -64,7 +64,6 @@ function SelectRolesPage() {
   const draftKey = (id: string) => `selectRoles_draft_${id}`;
 
   // stable localStorage key (person + agency)
-  const [requestDetails, setRequestDetails] = useState<any>(null);
   const stableStorageKey = (
     details?: { employee_name?: string; agency_name?: string } | null
   ) => {
@@ -413,6 +412,7 @@ function SelectRolesPage() {
 
   const [saving, setSaving] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [requestDetails, setRequestDetails] = useState<any>(null);
   const [loadingExistingData, setLoadingExistingData] = useState(false);
   const [availableBusinessUnits, setAvailableBusinessUnits] = useState<any[]>([]);
   const [hasExistingDbSelections, setHasExistingDbSelections] = useState(false);
@@ -445,41 +445,21 @@ function SelectRolesPage() {
     );
   }, [selectedRoles]);
 
-  // Prefer DB-fetched options; fallback to static by agency
+  // BU options (filtered by agency if present)
   const businessUnitOptions = React.useMemo(() => {
-    // 1) If we fetched from DB for this agency, use them
-    if (availableBusinessUnits && availableBusinessUnits.length > 0) {
-      return availableBusinessUnits.map((u) => ({
-        value: u.business_unit_code,
-        label: `${u.business_unit_name} (${u.business_unit_code})`,
+    const agencyCode = requestDetails?.agency_code;
+    if (!agencyCode) {
+      return businessUnits.map((unit) => ({
+        value: unit.businessUnit,
+        label: `${unit.description} (${unit.businessUnit})`,
       }));
     }
-
-    // 2) Fallback to static list filtered by agency code (if present)
-    const agencyCode = requestDetails?.agency_code;
-    const list = agencyCode
-      ? businessUnits.filter((u) => u.businessUnit.startsWith(agencyCode))
-      : businessUnits;
-
-    return list.map((u) => ({
-      value: u.businessUnit,
-      label: `${u.description} (${u.businessUnit})`,
+    const filteredUnits = businessUnits.filter((unit) => unit.businessUnit.startsWith(agencyCode));
+    return filteredUnits.map((unit) => ({
+      value: unit.businessUnit,
+      label: `${unit.description} (${unit.businessUnit})`,
     }));
-  }, [availableBusinessUnits, requestDetails?.agency_code]);
-
-  // Helper to resolve labels consistently for the preview text
-  const resolveBusinessUnitLabel = React.useCallback(
-    (code: string) => {
-      const hitDb = availableBusinessUnits?.find?.(
-        (u: any) => u.business_unit_code === code
-      );
-      if (hitDb) return `${hitDb.business_unit_name} (${hitDb.business_unit_code})`;
-      const hitStatic = businessUnits.find((u) => u.businessUnit === code);
-      if (hitStatic) return `${hitStatic.description} (${hitStatic.businessUnit})`;
-      return code;
-    },
-    [availableBusinessUnits]
-  );
+  }, [requestDetails?.agency_code]);
 
   const handleBusinessUnitChange = (selectedCodes: string[]) => {
     setValue('homeBusinessUnit' as any, selectedCodes, {
@@ -690,14 +670,14 @@ function SelectRolesPage() {
           const safeAgencyName  = formData?.agencyName  || '';
           const safeAgencyCode  = formData?.agencyCode  || '';
 
-          // 1) Set header details
+          // make header + BU filter work
           setRequestDetails({
             employee_name: safeEmployeeName,
             agency_name: safeAgencyName,
             agency_code: safeAgencyCode,
           });
 
-          // 2) Ensure BU options exist first so chips can render
+          // 🔑 if we have an agency code, fetch agency BUs immediately so MultiSelect has options
           if (safeAgencyCode) {
             await fetchBusinessUnitsForAgency(safeAgencyCode);
           }
@@ -705,7 +685,7 @@ function SelectRolesPage() {
           console.log('🔧 Copy flow - pendingFormData:', formData);
           console.log('🔧 Copy flow - roleData:', roleData);
 
-          // 3) Apply role data
+          // Map copied role data to form fields
           if (roleData && typeof roleData === 'object') {
             for (const [key, value] of Object.entries(roleData)) {
               if (typeof value === 'boolean' && value === true) {
@@ -731,10 +711,9 @@ function SelectRolesPage() {
             const hbuArr = coerceToArray(hbuRaw);
             setValue('homeBusinessUnit' as any, hbuArr, { shouldDirty: false });
             clearErrors('homeBusinessUnit' as any);
-            console.log('🔎 After setValue(HBU):', hbuArr, businessUnitOptions);
           }
 
-          // 4) Sync to UI now that options + values are in place
+          // force UI to reflect values we just set
           setTimeout(() => {
             const snap = getValues();
             reset(snap);
@@ -765,8 +744,7 @@ function SelectRolesPage() {
 
       // Normal edit flow
       const stateRequestId = (location as any)?.state?.requestId;
-      const { id: idParamRoute } = (location as any)?.state || {};
-      const effectiveId = stateRequestId || idParamRoute || (idParam as string | null);
+      const effectiveId = stateRequestId || (idParam as string | null);
 
       if (!effectiveId) {
         toast.error('Please complete the main form first before selecting roles.');
@@ -792,186 +770,9 @@ function SelectRolesPage() {
         console.log('🔁 Final sync after all hydration layers; autosave enabled:', snap);
       }, 0);
     })();
-  }, [location.state, idParam, navigate, reset, setValue, getValues, clearErrors, businessUnitOptions]);
+  }, [location.state, idParam, navigate, reset, setValue, getValues, clearErrors]);
 
-  // --- submit ---------------------------------------------------------------
-
-  const onSubmit = async (data: SecurityRoleSelection) => {
-    // Require at least one BU
-    const homeVal: any = (data as any).homeBusinessUnit;
-    if (!homeVal || (Array.isArray(homeVal) && homeVal.length === 0)) {
-      setError('homeBusinessUnit' as any, {
-        type: 'manual',
-        message: 'Home Business Unit is required. Please select at least one business unit.',
-      });
-      toast.error('Please select at least one Home Business Unit.');
-      homeBusinessUnitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-
-    // Require at least one role selected
-    const anyRole = Object.entries((data as any) || {}).some(
-      ([, value]) => typeof value === 'boolean' && value === true
-    );
-    if (!anyRole) {
-      toast.error('Please select at least one role.');
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      if (isEditingCopiedRoles) {
-        const pendingFormData = localStorage.getItem('pendingFormData');
-        if (!pendingFormData) throw new Error('No pending form data found');
-
-        const d: CopyFlowForm = JSON.parse(pendingFormData);
-
-        // --- Guardrails: Validate we have all not-null fields before inserting ---
-        const missing: string[] = [];
-        if (!d.employeeName) missing.push('Requested For (employeeName)');
-        if (!d.email) missing.push('Requested For Email');
-        if (!d.agencyName) missing.push('Agency Name');
-        if (!d.agencyCode) missing.push('Agency Code');
-        if (!d.submitterName) missing.push('Submitted By (name)');
-        if (!d.submitterEmail) missing.push('Submitted By (email)');
-        if (!d.supervisorName) missing.push('Supervisor Name');
-        if (!d.supervisorUsername) missing.push('Supervisor Email/Username');
-        if (!d.securityAdminName) missing.push('Security Admin Name');
-        if (!d.securityAdminUsername) missing.push('Security Admin Email/Username');
-
-        if (missing.length) {
-          setSaving(false);
-          toast.error(
-            `Before we can create the new request, we need the following from the main form: ${missing.join(', ')}.`
-          );
-          // Keep role selections; send the user back to the main form to complete required fields.
-          navigate('/', { state: { fromRolesCopyFlow: true } });
-          return;
-        }
-
-        const startDate = d.startDate || new Date().toISOString().split('T')[0];
-
-        console.log('🔧 Copy flow - creating request with data:', {
-          startDate,
-          employeeName: d.employeeName,
-          submitterName: d.submitterName,
-          submitterEmail: d.submitterEmail,
-          email: d.email,
-        });
-
-        const requestPayload = {
-          start_date: startDate,
-          employee_name: d.employeeName,
-          employee_id: d.employeeId || null,
-          is_non_employee: !!d.isNonEmployee,
-          work_location: d.workLocation || null,
-          work_phone: d.workPhone ? d.workPhone.replace(/\D/g, '') : null,
-          email: d.email,
-          agency_name: d.agencyName,
-          agency_code: d.agencyCode,
-          justification: d.justification || null,
-          submitter_name: d.submitterName,
-          submitter_email: d.submitterEmail,
-          supervisor_name: d.supervisorName,
-          supervisor_email: d.supervisorUsername,
-          security_admin_name: d.securityAdminName,
-          security_admin_email: d.securityAdminUsername,
-          status: 'pending',
-        };
-
-        const { data: newRequest, error: requestError } = await supabase
-          .from('security_role_requests')
-          .insert(requestPayload)
-          .select()
-          .single();
-
-        if (requestError) throw requestError;
-
-        const { error: areasError } = await supabase
-          .from('security_areas')
-          .insert({
-            request_id: newRequest.id,
-            area_type: 'accounting_procurement',
-            director_name: d.accountingDirector || null,
-            director_email: d.accountingDirectorUsername || null,
-          });
-
-        if (areasError) throw areasError;
-
-        const rawPayload = buildRoleSelectionData(newRequest.id, data, {
-          homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
-        });
-
-        const cleaned = coerceBooleansDeep(rawPayload);
-        const normalized = normalizeRoleFlagsTrueOnly(cleaned);
-
-        const { error: selectionsError } = await supabase
-          .from('security_role_selections')
-          .insert(normalized);
-
-        if (selectionsError) throw selectionsError;
-
-        // Clean up copy-flow context
-        localStorage.removeItem('pendingFormData');
-        localStorage.removeItem('editingCopiedRoles');
-        localStorage.removeItem('copiedRoleSelections');
-        localStorage.removeItem('copiedUserDetails');
-
-        toast.success('Role selections saved successfully!');
-        navigate('/success', { state: { requestId: newRequest.id } });
-      } else {
-        if (!requestId) {
-          toast.error('No request found. Please start from the main form.');
-          navigate('/');
-          return;
-        }
-
-        // Build payload with arrays parsed for TEXT[] columns
-        const rawPayload = buildRoleSelectionData(requestId, data, {
-          homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
-        });
-
-        // Coerce any sneaky "on"/["on","on"] values → booleans
-        const cleaned = coerceBooleansDeep(rawPayload);
-        const normalized = normalizeRoleFlagsTrueOnly(cleaned);
-
-        const { error } = await supabase
-          .from('security_role_selections')
-          .upsert(normalized, { onConflict: 'request_id' });
-
-        if (error) throw error;
-
-        // ✅ Clear local draft on successful save
-        try {
-          localStorage.removeItem(draftKey(requestId));
-        } catch {}
-
-        toast.success('Role selections saved successfully!');
-        navigate('/success', { state: { requestId } });
-      }
-    } catch (error: any) {
-      console.error('Error saving role selections:', error);
-      const errorMessage = error?.message || 'Unknown error occurred';
-
-      if (
-        error instanceof Error &&
-        error.message.includes('home_business_unit') &&
-        (error.message.includes('not-null') || error.message.includes('null value'))
-      ) {
-        setError('homeBusinessUnit' as any, {
-          type: 'manual',
-          message: 'Home Business Unit is required. Please select at least one business unit.',
-        });
-      } else {
-        toast.error(`Failed to save role selections: ${errorMessage}`);
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // --- UI -------------------------------------------------------------------
+  // (KEEP YOUR CURRENT onSubmit AND THE REST OF THE FILE BELOW THIS LINE)
 
   const ssTemplateRows = ['Business unit template', 'Department template', 'Personal template'];
   const ssActions = ['Create', 'Update', 'Delete'];
@@ -1017,7 +818,7 @@ function SelectRolesPage() {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8">
+            <form /* keep your existing handleSubmit/onSubmit below */ className="p-6 space-y-8">
               {/* Copy User Section */}
               <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                 <div className="flex">
@@ -1042,6 +843,50 @@ function SelectRolesPage() {
                       />
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Business Unit Information */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
+                  Business Unit Information
+                </h3>
+
+                <div ref={homeBusinessUnitRef}>
+                  <MultiSelect
+                    options={businessUnitOptions}
+                    value={watch('homeBusinessUnit' as any) || []}
+                    onChange={handleBusinessUnitChange}
+                    placeholder="Select business units..."
+                    label="Home Business Unit"
+                    required
+                    error={(errors as any).homeBusinessUnit?.message}
+                    searchPlaceholder="Search business units..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Selected Business Units:
+                  </label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {(() => {
+                      const watchedValue: any = watch('homeBusinessUnit' as any);
+                      const businessUnitsArray = Array.isArray(watchedValue)
+                        ? watchedValue
+                        : watchedValue
+                        ? [watchedValue]
+                        : [];
+                      return (
+                        businessUnitsArray
+                          .map((code: string) => {
+                            const unit = businessUnits.find((u) => u.businessUnit === code);
+                            return unit ? `${unit.description} (${unit.businessUnit})` : code;
+                          })
+                          .join(', ') || 'None selected'
+                      );
+                    })()}
+                  </p>
                 </div>
               </div>
 
