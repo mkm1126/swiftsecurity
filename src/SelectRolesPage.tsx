@@ -48,8 +48,8 @@ function SelectRolesPage() {
   const HOME_BU_IS_ARRAY = true;
 
   // --- helpers --------------------------------------------------------------
-  const isHydratingRef = useRef(true);          // gate autosave until hydration completes
-  const didInitRef = useRef(false);             // prevent mount flow from re-running
+  const isHydratingRef = useRef(true);  // gate autosave until hydration completes
+  const didInitRef = useRef(false);     // prevent mount flow from re-running
 
   function snakeToCamel(s: string) {
     return s.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
@@ -69,6 +69,33 @@ function SelectRolesPage() {
     return `selectRoles_${d.employee_name}_${d.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
   };
 
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    setError,
+    clearErrors,
+    getValues,
+    formState: { errors },
+  } = useForm<SecurityRoleSelection>({
+    defaultValues: {
+      homeBusinessUnit: [] as any,   // TEXT[] in DB
+      otherBusinessUnits: '' as any,
+    } as any,
+    shouldUnregister: false,         // keep values for unmounted inputs
+  });
+
+  // ✅ These were missing in the previous drop-in
+  const selectedRoles = watch();
+  const hasSelectedRoles = React.useMemo(() => {
+    return Object.entries(selectedRoles || {}).some(
+      ([, value]) => typeof value === 'boolean' && value === true
+    );
+  }, [selectedRoles]);
+
+  // draft restore (explicit)
   const restoreFromStableDraftFor = (
     details: { employee_name?: string; agency_name?: string } | null
   ): boolean => {
@@ -116,7 +143,7 @@ function SelectRolesPage() {
         console.log('🔁 Synced (id-scoped draft) values to UI with reset():', snap);
       }, 0);
 
-      // Show this toast only once per page load
+      // only toast once per full page load
       if (!didInitRef.current) {
         toast.message('Restored unsaved role selections from this device.');
       }
@@ -165,24 +192,6 @@ function SelectRolesPage() {
       .filter((s) => s.length === codeLen);
   };
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    reset,
-    setError,
-    clearErrors,
-    getValues,
-    formState: { errors },
-  } = useForm<SecurityRoleSelection>({
-    defaultValues: {
-      homeBusinessUnit: [] as any,
-      otherBusinessUnits: '' as any,
-    } as any,
-    shouldUnregister: false,
-  });
-
   const [isEditMode, setIsEditMode] = useState(false);
   const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -196,10 +205,10 @@ function SelectRolesPage() {
   const [hasExistingDbSelections, setHasExistingDbSelections] = useState(false);
   const homeBusinessUnitRef = useRef<HTMLDivElement | null>(null);
 
-  // 🔄 Autosave: subscribe to changes instead of putting watch() in deps
+  // 🔄 Autosave (subscription; no watch() in deps)
   useEffect(() => {
     if (!requestId) return;
-    const subscription = watch((formData) => {
+    const subscription = watch(() => {
       if (isHydratingRef.current || isEditingCopiedRoles) return;
       try {
         const payload = { ts: Date.now(), data: getValues() };
@@ -319,34 +328,28 @@ function SelectRolesPage() {
               const camel = snakeToCamel(k);
               setValue(camel as any, true as any, { shouldDirty: false });
               const suffixCamel = snakeToCamel(strip2(k));
-              if (
-                suffixCamel !== camel) {
-                setValue(suffixCamel as any, true as any, { shouldDirty: false });
-              }
+              if (suffixCamel !== camel) setValue(suffixCamel as any, true as any, { shouldDirty: false });
             }
             continue;
           }
-
           const camel = snakeToCamel(k);
           setValue(camel as any, (v ?? '') as any, { shouldDirty: false });
         }
 
+        // home_business_unit -> array for MultiSelect
         const hbu = (data as any).home_business_unit;
-        if (hbu !== undefined) {
-          const asArray = Array.isArray(hbu)
-            ? hbu
-            : typeof hbu === 'string' && hbu
-            ? hbu.split(',').map((s) => s.trim()).filter(Boolean)
-            : [];
-          setValue('homeBusinessUnit' as any, asArray as any, { shouldDirty: false });
-          clearErrors('homeBusinessUnit' as any);
-        }
+        const asArray = Array.isArray(hbu)
+          ? hbu
+          : typeof hbu === 'string' && hbu
+          ? hbu.split(',').map((s) => s.trim()).filter(Boolean)
+          : [];
+        setValue('homeBusinessUnit' as any, asArray as any, { shouldDirty: false });
+        clearErrors('homeBusinessUnit' as any);
 
         setTimeout(() => {
           const snap = getValues();
           reset(snap);
           console.log('🔁 Synced form state to UI with reset() after DB hydrate:', snap);
-          console.log('📡 Loaded selections from database:', data);
         }, 0);
       }
     } catch (err) {
@@ -354,74 +357,33 @@ function SelectRolesPage() {
     }
   };
 
-  // --- local draft persistence ---------------------------------------------
-
-  useEffect(() => {
-    if (!requestId) return;
-    const handle = setTimeout(() => {
-      try {
-        const payload = { ts: Date.now(), data: getValues() };
-        localStorage.setItem(draftKey(requestId), JSON.stringify(payload));
-      } catch {}
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [requestId, selectedRoles]);
-
-  useEffect(() => {
-    if (!requestId) return;
-    const saveOnHide = () => {
-      try {
-        const payload = { ts: Date.now(), data: getValues() };
-        localStorage.setItem(draftKey(requestId), JSON.stringify(payload));
-      } catch {}
-    };
-    window.addEventListener('pagehide', saveOnHide);
-    return () => window.removeEventListener('pagehide', saveOnHide);
-  }, [requestId, getValues]);
-
-  useEffect(() => {
-    if (!requestDetails || isHydratingRef.current || isEditingCopiedRoles) return;
-    const timeoutId = setTimeout(() => {
-      const formData = watch();
-      if (!formData || Object.keys(formData).length === 0) return;
-      const sk = stableStorageKey();
-      if (!sk) return;
-      localStorage.setItem(sk, JSON.stringify(formData));
-      console.log('💾 Auto-saving Select Roles form data:', { storageKey: sk, formData });
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [watch(), requestDetails, isEditingCopiedRoles]);
+  // --- local draft persistence (subscribe) ----------------------------------
+  // (The subscription above replaces the old effects that depended on watch())
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
+  // Back link: save drafts
   const handleBackToMainForm = () => {
-    if (requestId) {
-      const currentFormData = getValues();
-      localStorage.setItem(
-        draftKey(requestId),
-        JSON.stringify({ ts: Date.now(), data: currentFormData })
-      );
-      console.log('💾 Saving role selections before navigation (local draft):', {
-        key: draftKey(requestId),
-        currentFormData,
-      });
-      const sk = stableStorageKey();
-      if (sk) {
-        localStorage.setItem(sk, JSON.stringify(currentFormData));
-        console.log('💾 Saving role selections (stable key):', { key: sk, currentFormData });
-      }
-    } else {
-      console.log('🚫 Not saving role selections (no requestId)');
-    }
+    if (!requestId) return;
+    const currentFormData = getValues();
+    localStorage.setItem(draftKey(requestId), JSON.stringify({ ts: Date.now(), data: currentFormData }));
+    const sk = stableStorageKey();
+    if (sk) localStorage.setItem(sk, JSON.stringify(currentFormData));
   };
 
-  // --- mount flow -----------------------------------------------------------
+  // --- mount flow (run once) ------------------------------------------------
+  const navigateRef = useRef(navigate);
+  const resetRef = useRef(reset);
+  const setValueRef = useRef(setValue);
+  const getValuesRef = useRef(getValues);
 
   useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+
     (async () => {
-      // Copy flow check
       const pendingFormData = localStorage.getItem('pendingFormData');
       const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
@@ -440,56 +402,41 @@ function SelectRolesPage() {
           const safeAgencyName  = formData?.agencyName  || '';
           const safeAgencyCode  = formData?.agencyCode  || '';
 
-          // make header + BU filter work
-          setRequestDetails({
-            employee_name: safeEmployeeName,
-            agency_name: safeAgencyName,
-            agency_code: safeAgencyCode,
-          });
+          setRequestDetails({ employee_name: safeEmployeeName, agency_name: safeAgencyName, agency_code: safeAgencyCode });
 
-          // 🔑 if we have an agency code, fetch agency BUs immediately so MultiSelect has options
-          if (safeAgencyCode) {
-            await fetchBusinessUnitsForAgency(safeAgencyCode);
-          }
+          // 👉 ensure options exist before setting MultiSelect value
+          if (safeAgencyCode) await fetchBusinessUnitsForAgency(safeAgencyCode);
 
-          console.log('🔧 Copy flow - pendingFormData:', formData);
-          console.log('🔧 Copy flow - roleData:', roleData);
-
-          // Map copied role data to form fields
+          // map booleans/strings
           if (roleData && typeof roleData === 'object') {
             for (const [key, value] of Object.entries(roleData)) {
               if (typeof value === 'boolean' && value === true) {
-                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+                setValueRef.current(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
               } else if (typeof value === 'string' && value.trim()) {
-                setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+                setValueRef.current(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
               }
             }
-
-            // Home Business Unit (array/string → array)
-            const coerceToArray = (val: any): string[] => {
+            // HBU -> array
+            const toArray = (val: any): string[] => {
               if (Array.isArray(val)) return val.filter(Boolean);
               if (typeof val === 'string') {
-                try {
-                  const parsed = JSON.parse(val);
-                  if (Array.isArray(parsed)) return parsed.filter(Boolean);
-                } catch {}
+                try { const p = JSON.parse(val); if (Array.isArray(p)) return p.filter(Boolean); } catch {}
                 return val.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
               }
               return [];
             };
             const hbuRaw: any = (roleData as any)?.homeBusinessUnit ?? (roleData as any)?.home_business_unit;
-            const hbuArr = coerceToArray(hbuRaw);
-            setValue('homeBusinessUnit' as any, hbuArr, { shouldDirty: false });
+            setValueRef.current('homeBusinessUnit' as any, toArray(hbuRaw), { shouldDirty: false });
             clearErrors('homeBusinessUnit' as any);
           }
 
-          // force UI to reflect values we just set
+          // reflect in UI
           setTimeout(() => {
-            const snap = getValues();
-            reset(snap);
+            const snap = getValuesRef.current();
+            resetRef.current(snap);
           }, 0);
 
-          // finish hydration (enables autosave)
+          // open autosave gate
           setTimeout(() => {
             isHydratingRef.current = false;
           }, 0);
@@ -503,7 +450,7 @@ function SelectRolesPage() {
           localStorage.removeItem('copiedUserDetails');
         }
       } else {
-        // clean any partial copy flow data
+        // cleanup any stray copy-flow bits
         if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
           localStorage.removeItem('editingCopiedRoles');
           localStorage.removeItem('pendingFormData');
@@ -512,13 +459,11 @@ function SelectRolesPage() {
         }
       }
 
-      // Normal edit flow
       const stateRequestId = (location as any)?.state?.requestId;
       const effectiveId = stateRequestId || (idParam as string | null);
-
       if (!effectiveId) {
         toast.error('Please complete the main form first before selecting roles.');
-        navigate('/');
+        navigateRef.current('/');
         return;
       }
 
@@ -534,16 +479,16 @@ function SelectRolesPage() {
       }
 
       setTimeout(() => {
-        const snap = getValues();
-        reset(snap);
+        const snap = getValuesRef.current();
+        resetRef.current(snap);
         isHydratingRef.current = false;
         console.log('🔁 Final sync after all hydration layers; autosave enabled:', snap);
       }, 0);
     })();
-  }, [location.state, idParam, navigate, reset, setValue, getValues, clearErrors]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once
 
-  // (KEEP YOUR CURRENT onSubmit AND THE REST OF THE FILE BELOW THIS LINE)
-
+  // --- UI (top half) --------------------------------------------------------
   const ssTemplateRows = ['Business unit template', 'Department template', 'Personal template'];
   const ssActions = ['Create', 'Update', 'Delete'];
 
@@ -624,6 +569,7 @@ function SelectRolesPage() {
 
                 <div ref={homeBusinessUnitRef}>
                   <MultiSelect
+                    key={`hbu-${requestDetails?.agency_code || 'all'}-${businessUnitOptions.length}`} // force remount when options change
                     options={businessUnitOptions}
                     value={watch('homeBusinessUnit' as any) || []}
                     onChange={handleBusinessUnitChange}
@@ -642,17 +588,14 @@ function SelectRolesPage() {
                   <p className="mt-1 text-sm text-gray-900">
                     {(() => {
                       const watchedValue: any = watch('homeBusinessUnit' as any);
-                      const businessUnitsArray = Array.isArray(watchedValue)
+                      const arr = Array.isArray(watchedValue)
                         ? watchedValue
                         : watchedValue
                         ? [watchedValue]
                         : [];
                       return (
-                        businessUnitsArray
-                          .map((code: string) => {
-                            const unit = businessUnits.find((u) => u.businessUnit === code);
-                            return unit ? `${unit.description} (${unit.businessUnit})` : code;
-                          })
+                        arr
+                          .map((code: string) => resolveBusinessUnitLabel(code))
                           .join(', ') || 'None selected'
                       );
                     })()}
