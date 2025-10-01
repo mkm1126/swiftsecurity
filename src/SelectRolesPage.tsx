@@ -1,5 +1,8 @@
 // src/SelectRolesPage.tsx
 // Complete version with all role selection tables and copy user functionality
+// Includes copy-flow guardrails to prevent 400 errors when required main-form
+// fields (like agency_name) are missing.
+
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -681,92 +684,8 @@ function SelectRolesPage() {
         localStorage.setItem(draftKey(requestId), JSON.stringify(payload));
       } catch {}
     }, 300);
-    
-  // --- POLLING COPY-FLOW UPDATE EFFECT: applies copied roles if they appear in localStorage after mount ---
-  useEffect(() => {
-    let cancelled = false;
 
-    const applyFromLocalStorage = () => {
-      try {
-        const editing = localStorage.getItem('editingCopiedRoles') === 'true';
-        const rawCopied = localStorage.getItem('copiedRoleSelections');
-        const rawPending = localStorage.getItem('pendingFormData');
-
-        if (!editing || !rawCopied || cancelled) return false;
-
-        const copied = JSON.parse(rawCopied);
-        const pendingForm = rawPending ? JSON.parse(rawPending) : null;
-
-        const payload = (copied && typeof copied === 'object' && copied.role_selection_json && Object.keys(copied.role_selection_json || {}).length)
-          ? copied.role_selection_json
-          : copied;
-
-        if (!payload || typeof payload !== 'object') return false;
-
-        const entries = Object.entries(payload);
-        const booleansTrue = entries.filter(([_, v]) => typeof v === 'boolean' && v === true).map(([k]) => k);
-        const stringsNonEmpty = entries.filter(([_, v]) => typeof v === 'string' && v !== '') as [string, string][];
-
-        const mapKey = (k: string) => {
-          switch (k) {
-            case 'voucherEntry': return 'voucherEntry';
-            case 'apInquiryOnly': return 'apInquiryOnly';
-            case 'matchOverride': return 'matchOverride';
-            case 'maintenanceVoucherBuildErrors': return 'maintenanceVoucherBuildErrors';
-            default: return k;
-          }
-        };
-
-        booleansTrue.forEach((k) => {
-          const fk = mapKey(k);
-          try {
-            setValue(fk as any, true, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
-          } catch {}
-        });
-
-        stringsNonEmpty.forEach(([k, v]) => {
-          const fk = mapKey(k);
-          try {
-            setValue(fk as any, v as any, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
-          } catch {}
-        });
-
-        if (pendingForm && typeof pendingForm === 'object') {
-          if ((pendingForm as any).request_type) setValue('requestType' as any, (pendingForm as any).request_type as any, { shouldDirty: true });
-          if ((pendingForm as any).request_subtype) setValue('requestSubtype' as any, (pendingForm as any).request_subtype as any, { shouldDirty: true });
-          if ((pendingForm as any).home_business_unit) setValue('homeBusinessUnit' as any, (pendingForm as any).home_business_unit as any, { shouldDirty: true });
-          if ((pendingForm as any).other_business_units) setValue('otherBusinessUnits' as any, (pendingForm as any).other_business_units as any, { shouldDirty: true });
-        }
-
-        console.log('✅ Copy flow (poll) - applied selections and fields from localStorage.');
-        localStorage.setItem('selectRolesFromCopyApplied', 'true');
-        return true;
-      } catch (err) {
-        console.error('❌ Copy flow (poll) - parse/apply failed', err);
-        return false;
-      }
-    };
-
-    const alreadyApplied = localStorage.getItem('selectRolesFromCopyApplied') === 'true';
-    if (!alreadyApplied) {
-      // Try once immediately
-      if (!applyFromLocalStorage()) {
-        // else poll briefly for changes for up to ~10s
-        const start = Date.now();
-        const id = setInterval(() => {
-          if (cancelled) { clearInterval(id); return; }
-          const done = applyFromLocalStorage();
-          const tooLong = (Date.now() - start) > 10000;
-          if (done || tooLong) clearInterval(id);
-        }, 400);
-        return () => { cancelled = true; clearInterval(id); };
-      }
-    }
-
-    return () => { cancelled = true; };
-  }, [setValue]);
-return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => clearTimeout(handle);
   }, [requestId, selectedRoles]); // watch the whole form
 
   // Also save on pagehide as a fallback
@@ -839,43 +758,52 @@ return () => clearTimeout(handle);
       if (isCopyFlow) {
         setIsEditingCopiedRoles(true);
         try {
-          const formData: CopyFlowForm = JSON.parse(pendingFormData);
-          const roleData = JSON.parse(copiedRoleSelections);
+          const formData: CopyFlowForm = JSON.parse(pendingFormData as string);
+          const roleData = JSON.parse(copiedRoleSelections as string);
+
+          // Defensive defaults so the header renders and BU filtering works
+          const safeEmployeeName = formData?.employeeName || (JSON.parse(copiedUserDetails as string)?.employee_name) || '';
+          const safeAgencyName  = formData?.agencyName  || '';
+          const safeAgencyCode  = formData?.agencyCode  || '';
+
           setRequestDetails({ 
-            employee_name: formData.employeeName, 
-            agency_name: formData.agencyName, 
-            agency_code: formData.agencyCode 
+            employee_name: safeEmployeeName, 
+            agency_name: safeAgencyName, 
+            agency_code: safeAgencyCode,
           });
           
           console.log('🔧 Copy flow - pendingFormData:', formData);
           console.log('🔧 Copy flow - roleData:', roleData);
           
           // Map copied role data to form fields
-          if (roleData) {
-            Object.entries(roleData).forEach(([key, value]) => {
+          if (roleData && typeof roleData === 'object') {
+            const entries = Object.entries(roleData);
+            entries.forEach(([key, value]) => {
+              // set booleans that are true
               if (typeof value === 'boolean' && value === true) {
                 setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
               } else if (typeof value === 'string' && value.trim()) {
                 setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
               }
-          // Handle array-like/multi-select fields explicitly
-          const coerceToArray = (val: any): string[] => {
-            if (Array.isArray(val)) return val.filter(Boolean);
-            if (typeof val === 'string') {
-              try {
-                const parsed = JSON.parse(val);
-                if (Array.isArray(parsed)) return parsed.filter(Boolean);
-              } catch {}
-              return val.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
-            }
-            return [];
-          };
-          const hbuRaw: any = (roleData as any)?.homeBusinessUnit ?? (roleData as any)?.home_business_unit;
-          const hbuArr = coerceToArray(hbuRaw);
-          if (hbuArr.length) {
-            setValue('homeBusinessUnit' as any, hbuArr as any, { shouldDirty: false });
-          }
             });
+
+            // Handle array-like/multi-select fields explicitly
+            const coerceToArray = (val: any): string[] => {
+              if (Array.isArray(val)) return val.filter(Boolean);
+              if (typeof val === 'string') {
+                try {
+                  const parsed = JSON.parse(val);
+                  if (Array.isArray(parsed)) return parsed.filter(Boolean);
+                } catch {}
+                return val.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+              }
+              return [];
+            };
+            const hbuRaw: any = (roleData as any)?.homeBusinessUnit ?? (roleData as any)?.home_business_unit;
+            const hbuArr = coerceToArray(hbuRaw);
+            if (hbuArr.length) {
+              setValue('homeBusinessUnit' as any, hbuArr as any, { shouldDirty: false });
+            }
           }
           
           // Mark hydration as complete
@@ -970,9 +898,30 @@ return () => clearTimeout(handle);
         if (!pendingFormData) throw new Error('No pending form data found');
 
         const d: CopyFlowForm = JSON.parse(pendingFormData);
-        const pocUser = localStorage.getItem('pocUserName');
 
-        // Ensure start_date is properly set - this is critical for the database constraint
+        // --- Guardrails: Validate we have all not-null fields before inserting ---
+        const missing: string[] = [];
+        if (!d.employeeName) missing.push('Requested For (employeeName)');
+        if (!d.email) missing.push('Requested For Email');
+        if (!d.agencyName) missing.push('Agency Name');
+        if (!d.agencyCode) missing.push('Agency Code');
+        if (!d.submitterName) missing.push('Submitted By (name)');
+        if (!d.submitterEmail) missing.push('Submitted By (email)');
+        if (!d.supervisorName) missing.push('Supervisor Name');
+        if (!d.supervisorUsername) missing.push('Supervisor Email/Username');
+        if (!d.securityAdminName) missing.push('Security Admin Name');
+        if (!d.securityAdminUsername) missing.push('Security Admin Email/Username');
+
+        if (missing.length) {
+          setSaving(false);
+          toast.error(
+            `Before we can create the new request, we need the following from the main form: ${missing.join(', ')}.`
+          );
+          // Keep role selections; send the user back to the main form to complete required fields.
+          navigate('/', { state: { fromRolesCopyFlow: true } });
+          return;
+        }
+
         const startDate = d.startDate || new Date().toISOString().split('T')[0];
         
         console.log('🔧 Copy flow - creating request with data:', {
@@ -981,7 +930,6 @@ return () => clearTimeout(handle);
           submitterName: d.submitterName,
           submitterEmail: d.submitterEmail,
           email: d.email,
-          hasStartDate: !!startDate
         });
 
         const requestPayload = {
@@ -1002,7 +950,6 @@ return () => clearTimeout(handle);
           security_admin_name: d.securityAdminName,
           security_admin_email: d.securityAdminUsername,
           status: 'pending',
-          poc_user: pocUser,
         };
 
         const { data: newRequest, error: requestError } = await supabase
@@ -1037,6 +984,7 @@ return () => clearTimeout(handle);
 
         if (selectionsError) throw selectionsError;
 
+        // Clean up copy-flow context
         localStorage.removeItem('pendingFormData');
         localStorage.removeItem('editingCopiedRoles');
         localStorage.removeItem('copiedRoleSelections');
@@ -1131,8 +1079,8 @@ return () => clearTimeout(handle);
                   </p>
                   {requestDetails && (
                     <p className="mt-2 text-sm text-blue-600">
-                      Request for: <strong>{requestDetails?.employee_name}</strong> at{' '}
-                      <strong>{requestDetails?.agency_name}</strong>
+                      Request for: <strong>{requestDetails?.employee_name}</strong>{' '}
+                      {requestDetails?.agency_name ? <>at <strong>{requestDetails?.agency_name}</strong></> : null}
                     </p>
                   )}
                 </div>
@@ -3415,7 +3363,7 @@ return () => clearTimeout(handle);
                   </tbody>
                 </table>
               </div>
- 
+
               {/* Role Justification */}
               <div className="space-y-6">
                 <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
