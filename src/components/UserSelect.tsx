@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -24,7 +23,7 @@ interface UserSelectProps {
   required?: boolean;
   currentUser?: string | null;
   currentRequestId?: string | null;
-  formData?: any; // Current form data from parent component (new request in progress)
+  formData?: any; // Current form data from parent component
 }
 
 /** Utility: camelCase a snake_case key */
@@ -32,7 +31,7 @@ function toCamel(key: string) {
   return key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
-/** Utility: deep map keys to camelCase (1 level is enough for our data) */
+/** Utility: map keys to camelCase (1 level is enough for our data) */
 function camelizeKeys<T extends Record<string, any>>(obj: T | null | undefined): Record<string, any> {
   if (!obj || typeof obj !== 'object') return {};
   const out: Record<string, any> = {};
@@ -63,7 +62,7 @@ function normalizeRoles(roleSelections: any): Record<string, any> {
     if (excluded.has(k)) delete base[k];
   }
 
-  // Map common snake_case to expected camelCase aliases if needed
+  // Map the common snake_case fields to the expected camelCase names
   if (roleSelections?.home_business_unit && !base.homeBusinessUnit) {
     base.homeBusinessUnit = roleSelections.home_business_unit;
   }
@@ -74,7 +73,95 @@ function normalizeRoles(roleSelections: any): Record<string, any> {
   return base;
 }
 
-export default function UserSelect({ 
+/** Try to find the most recent/complete "main form" draft in localStorage. */
+function findLatestMainFormDraft(): any | null {
+  let best: any = null;
+  let bestScore = -1;
+
+  const requiredKeys = [
+    'employeeName', 'email', 'agencyCode',
+    'submitterName', 'submitterEmail',
+    'supervisorName', 'supervisorUsername',
+    'securityAdminName', 'securityAdminUsername'
+  ];
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)!;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const val = JSON.parse(raw);
+      if (!val || typeof val !== 'object') continue;
+
+      // score how many required fields are present
+      const score = requiredKeys.reduce((acc, k) => acc + (val[k] ? 1 : 0), 0);
+      if (score > bestScore) {
+        best = val;
+        bestScore = score;
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  if (best) log('🧭 Chosen main-form draft from localStorage with score', bestScore, best);
+  else log('🧭 No usable main-form draft was found in localStorage.');
+  return best;
+}
+
+/** Merge current formData prop with a discovered draft. Never replaces the
+ * "Requested For" person with the copied user's identity. */
+function buildCompleteFormData(formDataProp: any, draft: any, userDetails: any) {
+  const f = formDataProp || {};
+  const d = draft || {};
+
+  // NOTE: Do *not* overwrite the new request's "Requested For" with the copied user.
+  // Keep the current/new employee from the main form (f/d), only use userDetails to
+  // fill innocuous defaults like startDate when missing.
+  const start = f.startDate || d.startDate || userDetails?.start_date || new Date().toISOString().split('T')[0];
+
+  const merged = {
+    // --- Requested For (new request target) ---
+    startDate: start,
+    employeeName: f.employeeName ?? d.employeeName ?? '',   // KEEP the new user
+    employeeId:   f.employeeId   ?? d.employeeId   ?? '',
+    email:        f.email        ?? d.email        ?? '',
+    isNonEmployee: f.isNonEmployee ?? d.isNonEmployee ?? false,
+    workLocation: f.workLocation ?? d.workLocation ?? '',
+    workPhone:    f.workPhone    ?? d.workPhone    ?? '',
+    agencyName:   f.agencyName   ?? d.agencyName   ?? '',
+    agencyCode:   f.agencyCode   ?? d.agencyCode   ?? userDetails?.agency_code ?? '',
+
+    // --- Submitted By (requestor) ---
+    submitterName:  f.submitterName  ?? d.submitterName  ?? '',
+    submitterEmail: f.submitterEmail ?? d.submitterEmail ?? '',
+
+    // --- Supervisor ---
+    supervisorName:     f.supervisorName     ?? d.supervisorName     ?? '',
+    supervisorUsername: f.supervisorUsername ?? d.supervisorUsername ?? '',
+
+    // --- Security Admin ---
+    securityAdminName:     f.securityAdminName     ?? d.securityAdminName     ?? '',
+    securityAdminUsername: f.securityAdminUsername ?? d.securityAdminUsername ?? '',
+
+    // --- Area directors (can come from the copied request for convenience) ---
+    elmKeyAdmin:           f.elmKeyAdmin           ?? d.elmKeyAdmin           ?? (userDetails?.security_areas?.find((a: any) => a.area_type === 'elm')?.director_name || ''),
+    elmKeyAdminUsername:   f.elmKeyAdminUsername   ?? d.elmKeyAdminUsername   ?? (userDetails?.security_areas?.find((a: any) => a.area_type === 'elm')?.director_email || ''),
+    hrDirector:            f.hrDirector            ?? d.hrDirector            ?? (userDetails?.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_name || ''),
+    hrDirectorEmail:       f.hrDirectorEmail       ?? d.hrDirectorEmail       ?? (userDetails?.security_areas?.find((a: any) => a.area_type === 'hr_payroll')?.director_email || ''),
+    accountingDirector:    f.accountingDirector    ?? d.accountingDirector    ?? (userDetails?.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_name || ''),
+    accountingDirectorUsername: f.accountingDirectorUsername ?? d.accountingDirectorUsername ?? (userDetails?.security_areas?.find((a: any) => a.area_type === 'accounting_procurement')?.director_email || ''),
+
+    // --- HR bits (if they exist on your main form) ---
+    hrMainframeLogonId: f.hrMainframeLogonId ?? d.hrMainframeLogonId ?? '',
+    hrViewStatewide:    f.hrViewStatewide    ?? d.hrViewStatewide    ?? false,
+  };
+
+  log('🧩 buildCompleteFormData ->', merged);
+  return merged;
+}
+
+function UserSelect({ 
   selectedUser, 
   onUserChange, 
   error, 
@@ -113,7 +200,7 @@ export default function UserSelect({
 
     // Save both a raw and normalized version to be future-proof
     localStorage.setItem('pendingFormData', JSON.stringify(pendingFormData));
-    localStorage.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData)); // legacy compatibility
+    localStorage.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData)); // some pages referenced this earlier
     localStorage.setItem('copiedRoleSelectionsRaw', JSON.stringify(roleSelections || {}));
     localStorage.setItem('copiedRoleSelections', JSON.stringify(normalizedRoles));
 
@@ -138,69 +225,13 @@ export default function UserSelect({
     return { normalizedRoles };
   };
 
-  const buildPendingFormData = (): any => {
-    // Construct a "safe" pending form model so SelectRolesPage never sees nulls for required columns
-    // Keep "Requested For" (employeeName/Id) EMPTY so it stays the current request's user.
-    const fallback = (v: any, def: any) => (v === null || v === undefined || v === '') ? def : v;
-
-    // Try to carry submitter + agency from the in-progress form if present
-    const agencyName = fallback(formData?.agencyName, 'UNKNOWN');
-    const agencyCode = fallback(formData?.agencyCode, '');
-    const submitterName = fallback(formData?.submitterName, '');
-    const submitterEmail = fallback(formData?.submitterEmail, '');
-
-    // Preserve Home BU/Other BUs if the form already has them filled (e.g., when re-copying)
-    const homeBusinessUnit = fallback(formData?.homeBusinessUnit, '');
-    const otherBusinessUnits = fallback(formData?.otherBusinessUnits, '');
-
-    return {
-      // Keep Requested For blank so the current user stays intact
-      startDate: fallback(formData?.startDate, new Date().toISOString().split('T')[0]),
-      employeeName: '', // do not override current request's "Requested For"
-      employeeId: '',
-      isNonEmployee: fallback(formData?.isNonEmployee, false),
-      workLocation: fallback(formData?.workLocation, ''),
-      workPhone: fallback(formData?.workPhone, ''),
-      email: fallback(formData?.email, ''),
-
-      // These MUST be present to avoid DB not-null errors on insert
-      agencyName,
-      agencyCode,
-
-      // Submitter (keep current submitter)
-      submitterName,
-      submitterEmail,
-
-      // Supervisor + Security Admin (keep current selection)
-      supervisorName: fallback(formData?.supervisorName, ''),
-      supervisorUsername: fallback(formData?.supervisorUsername, ''),
-      securityAdminName: fallback(formData?.securityAdminName, ''),
-      securityAdminUsername: fallback(formData?.securityAdminUsername, ''),
-
-      // Area directors – leave blank (will be set by area page if needed)
-      elmKeyAdmin: fallback(formData?.elmKeyAdmin, ''),
-      elmKeyAdminUsername: fallback(formData?.elmKeyAdminUsername, ''),
-      hrDirector: fallback(formData?.hrDirector, ''),
-      hrDirectorEmail: fallback(formData?.hrDirectorEmail, ''),
-      accountingDirector: fallback(formData?.accountingDirector, ''),
-      accountingDirectorUsername: fallback(formData?.accountingDirectorUsername, ''),
-
-      // HR-specific fields (keep current)
-      hrMainframeLogonId: fallback(formData?.hrMainframeLogonId, ''),
-      hrViewStatewide: fallback(formData?.hrViewStatewide, false),
-
-      // BU fields (keep current if present; roles normalize will also set these)
-      homeBusinessUnit,
-      otherBusinessUnits,
-    };
-  };
-
   const handleEditRoles = () => {
     if (!selectedUser || !userDetails) {
       console.error('No user selected or user details not loaded');
       return;
     }
-    const currentFormData = buildPendingFormData();
+    const mainDraft = findLatestMainFormDraft();
+    const currentFormData = buildCompleteFormData(formData, mainDraft, userDetails);
     const { normalizedRoles } = persistCopyContext({
       pendingFormData: currentFormData,
       roleSelections,
@@ -218,7 +249,9 @@ export default function UserSelect({
       return;
     }
 
-    const completeFormData = buildPendingFormData();
+    // Merge prop formData with the latest main-form draft
+    const mainDraft = findLatestMainFormDraft();
+    const completeFormData = buildCompleteFormData(formData, mainDraft, userDetails);
 
     const { normalizedRoles } = persistCopyContext({
       pendingFormData: completeFormData,
@@ -232,7 +265,9 @@ export default function UserSelect({
     navigate(goToCorrectArea(userDetails));
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     if (selectedUser?.request_id) {
@@ -253,8 +288,6 @@ export default function UserSelect({
           employee_name, 
           employee_id, 
           email,
-          agency_name,
-          agency_code,
           security_areas (
             area_type,
             director_name,
@@ -271,7 +304,7 @@ export default function UserSelect({
       log('All users fetched from approved/completed requests:', data);
 
       // Dedup by employee_id
-      const uniqueUsers = (data || []).reduce((acc: User[], current: any) => {
+      const uniqueUsers = data.reduce((acc: User[], current: any) => {
         const exists = acc.find(u => u.employee_id === current.employee_id);
         if (!exists) {
           acc.push({
@@ -392,8 +425,7 @@ export default function UserSelect({
               <UserRoleDetails 
                 userDetails={userDetails} 
                 roleSelections={roleSelections}
-                onEditRoles={handleEditRoles}
-                hideActionButtons // ensure top buttons are hidden (you already have bottom buttons)
+                // no mid-card buttons; use the bottom buttons instead
               />
               <div className="mt-4 flex gap-2">
                 <button
@@ -415,4 +447,6 @@ export default function UserSelect({
       )}
     </div>
   );
-}
+} 
+
+export default UserSelect;
