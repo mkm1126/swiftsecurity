@@ -125,31 +125,42 @@ function App() {
   }, [isTestMode, reset, effectiveId]);
 
   /**
-   * Restore main-form data when returning from a role-selection page.
-   * IMPORTANT FIX:
-   * We NO LONGER purge any localStorage keys for role pages here.
-   * That purge was deleting the role-page "draft" (e.g. selectRoles_draft_<requestId>),
-   * which prevented SelectRolesPage from reloading prior selections if the user
-   * navigated back to the main form and then returned.
+   * Restore main-form data ONLY when explicitly asked to (location.state.restoreMain === true).
+   * Also: on a hard reload or a "fresh" entry to this page, clear any leftover main-form cache
+   * so the form starts clean.
    */
   useEffect(() => {
-    if (effectiveId || hasRestoredData) return; // Skip if editing existing request or already restored
+    // Detect a hard reload / fresh entry (no navigation state)
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    const isReload = nav?.type === 'reload';
+    const freshEntry = !location.state && (isReload || location.key === 'default');
+
+    if (freshEntry) {
+      // Start clean — don't auto-restore old main-form data on a fresh load
+      localStorage.removeItem('pendingMainFormData');
+      return;
+    }
+
+    // Only restore if a caller explicitly set restoreMain === true in navigation state
+    const shouldRestore = Boolean((location.state as any)?.restoreMain === true);
+    if (!shouldRestore || effectiveId || hasRestoredData) return;
 
     const savedFormData = localStorage.getItem('pendingMainFormData');
-    if (savedFormData) {
-      try {
-        const parsedData = JSON.parse(savedFormData);
-        console.log('Restoring form data:', parsedData);
-        reset(parsedData);
-        setHasRestoredData(true);
-        // Keep role drafts intact; only clear the *main form* cache
-        localStorage.removeItem('pendingMainFormData');
-      } catch (error) {
-        console.error('Error restoring form data:', error);
-        localStorage.removeItem('pendingMainFormData');
-      }
+    if (!savedFormData) return;
+
+    try {
+      const parsedData = JSON.parse(savedFormData);
+      console.log('Restoring form data (explicit):', parsedData);
+      reset(parsedData);
+      setHasRestoredData(true);
+    } catch (error) {
+      console.error('Error restoring form data:', error);
+    } finally {
+      // Either way, drop the cache so it doesn’t linger
+      localStorage.removeItem('pendingMainFormData');
     }
-  }, [effectiveId, hasRestoredData, reset]);
+  }, [effectiveId, hasRestoredData, reset, location.state, location.key]);
+
 
   // Autofill test data (skip during edit or after restore)
   useEffect(() => {
@@ -478,10 +489,10 @@ function App() {
         await copyExistingUserRoles(requestId!, (selectedUser as any).employee_id);
       }
 
-      // Save form data before navigating (only for new requests)
+/*      // Save form data before navigating (only for new requests)
       if (!isEditing) {
         localStorage.setItem('pendingMainFormData', JSON.stringify(data));
-      }
+      } */
 
       // Navigate to the appropriate role selection page based on security area
       let targetRoute = '/select-roles'; // default to accounting/procurement
