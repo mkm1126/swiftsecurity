@@ -504,8 +504,8 @@ function SelectRolesPage() {
     formState: { errors },
   } = useForm<SecurityRoleSelection>({
     defaultValues: {
-      homeBusinessUnit: [] as any, // array (TEXT[]) mode
-      otherBusinessUnits: '' as any,
+      homeBusinessUnit: [], // array (TEXT[]) mode
+      otherBusinessUnits: '',
     } as any,
     shouldUnregister: false, // ✅ keep hidden/unmounted field values
   });
