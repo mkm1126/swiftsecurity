@@ -48,13 +48,19 @@ function camelizeKeys<T extends Record<string, any>>(obj: T | null | undefined):
  */
 function normalizeRoles(roleSelections: any): Record<string, any> {
   if (!roleSelections) return {};
-  const json = (roleSelections?.role_selection_json && Object.keys(roleSelections.role_selection_json).length > 0)
-    ? roleSelections.role_selection_json
-    : roleSelections;
+
+  const json =
+    roleSelections?.role_selection_json && Object.keys(roleSelections.role_selection_json).length > 0
+      ? roleSelections.role_selection_json
+      : roleSelections;
 
   const excluded = new Set([
-    'id', 'created_at', 'updated_at', 'request_id',
-    'role_justification', 'roleJustification'
+    'id',
+    'created_at',
+    'updated_at',
+    'request_id',
+    'role_justification',
+    'roleJustification',
   ]);
 
   const base = camelizeKeys(json);
@@ -62,7 +68,7 @@ function normalizeRoles(roleSelections: any): Record<string, any> {
     if (excluded.has(k)) delete base[k];
   }
 
-  // Map the common snake_case fields to the expected camelCase names
+  // Map common snake_case to expected camelCase aliases if needed
   if (roleSelections?.home_business_unit && !base.homeBusinessUnit) {
     base.homeBusinessUnit = roleSelections.home_business_unit;
   }
@@ -70,8 +76,25 @@ function normalizeRoles(roleSelections: any): Record<string, any> {
     base.otherBusinessUnits = roleSelections.other_business_units;
   }
 
+  // 🔧 ALWAYS normalize homeBusinessUnit to string[]
+  const rawHBU =
+    base.homeBusinessUnit ??
+    json.homeBusinessUnit ??
+    roleSelections.home_business_unit ??
+    null;
+
+  let hbuArray: string[] = [];
+  if (Array.isArray(rawHBU)) {
+    hbuArray = rawHBU.filter(Boolean);
+  } else if (typeof rawHBU === 'string' && rawHBU.trim()) {
+    // handles comma or whitespace separated strings
+    hbuArray = rawHBU.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+  }
+  base.homeBusinessUnit = hbuArray;
+
   return base;
 }
+
 
 /** Try to find the most recent/complete "main form" draft in localStorage. */
 function findLatestMainFormDraft(): any | null {
