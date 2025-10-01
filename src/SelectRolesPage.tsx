@@ -65,6 +65,13 @@ function SelectRolesPage() {
   const inputStd =
     'h-10 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm placeholder:text-gray-400';
 
+  // ---- behavior switches -----------------------------------------------------
+  // Do NOT restore from any local drafts unless explicitly allowed.
+  // Toggle to true if you want old behavior globally.
+  const ALLOW_AUTO_RESTORE = false;
+  
+  // Optional: turn on a console note when something tries to auto-restore but is blocked
+  const LOG_BLOCKED_RESTORE = true;
   
   const draftKey = (id: string) => `selectRoles_draft_${id}`;
 
@@ -150,11 +157,6 @@ function SelectRolesPage() {
         reset(snap);
         console.log('🔁 Synced (id-scoped draft) values to UI with reset():', snap);
       }, 0);
-
-      // only toast once per full page load
-      if (!didInitRef.current) {
-        toast.message('Restored unsaved role selections from this device.');
-      }
     } catch (e) {
       console.warn('Could not restore local draft:', e);
     }
@@ -368,9 +370,145 @@ function SelectRolesPage() {
   // --- local draft persistence (subscribe) ----------------------------------
   // (The subscription above replaces the old effects that depended on watch())
 
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+useEffect(() => {
+  (async () => {
+    // Router flags you can pass when navigating to this page:
+    // { fromMainForm: true, restoreDraft: true } etc.
+    const navState = (location && (location as any).state) || {};
+    const wantRestore = !!navState.restoreDraft || ALLOW_AUTO_RESTORE;
+
+    // Detect copy flow (all three items must exist)
+    const pendingFormData = localStorage.getItem('pendingFormData');
+    const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
+    const copiedUserDetails = localStorage.getItem('copiedUserDetails');
+    const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
+    const isCopyFlow =
+      editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
+
+    if (isCopyFlow) {
+      setIsEditingCopiedRoles(true);
+      try {
+        const formData: CopyFlowForm = JSON.parse(pendingFormData as string);
+        const roleData = JSON.parse(copiedRoleSelections as string);
+        const copiedUser = JSON.parse(copiedUserDetails as string);
+
+        const safeEmployeeName = formData?.employeeName || copiedUser?.employee_name || '';
+        const safeAgencyName = formData?.agencyName || '';
+        const safeAgencyCode = formData?.agencyCode || '';
+
+        // header + BU filter
+        setRequestDetails({
+          employee_name: safeEmployeeName,
+          agency_name: safeAgencyName,
+          agency_code: safeAgencyCode,
+        });
+
+        // ensure BU options exist for MultiSelect right away
+        if (safeAgencyCode) {
+          await fetchBusinessUnitsForAgency(safeAgencyCode);
+        }
+
+        // only copy into the form when user is *explicitly* in copy flow
+        if (roleData && typeof roleData === 'object') {
+          for (const [key, value] of Object.entries(roleData)) {
+            if (typeof value === 'boolean' && value === true) {
+              setValue(key as keyof SecurityRoleSelection, true as any, { shouldDirty: false });
+            } else if (typeof value === 'string' && value.trim()) {
+              setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: false });
+            }
+          }
+
+          // Home Business Unit (array/string → array)
+          const toArr = (val: any): string[] => {
+            if (Array.isArray(val)) return val.filter(Boolean);
+            if (typeof val === 'string') {
+              try {
+                const parsed = JSON.parse(val);
+                if (Array.isArray(parsed)) return parsed.filter(Boolean);
+              } catch {}
+              return val.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+            }
+            return [];
+          };
+          const hbuRaw: any = (roleData as any)?.homeBusinessUnit ?? (roleData as any)?.home_business_unit;
+          setValue('homeBusinessUnit' as any, toArr(hbuRaw), { shouldDirty: false });
+          clearErrors('homeBusinessUnit' as any);
+        }
+
+        // reflect in UI
+        setTimeout(() => {
+          const snap = getValues();
+          reset(snap);
+        }, 0);
+
+        // finish hydration
+        setTimeout(() => {
+          isHydratingRef.current = false;
+        }, 0);
+        return;
+      } catch (e) {
+        console.error('Error loading copy-flow data:', e);
+        toast.error('Error loading copied user data');
+        localStorage.removeItem('editingCopiedRoles');
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
+      }
+    } else {
+      // Clean any partial copy-flow crumbs if present
+      if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
+        localStorage.removeItem('editingCopiedRoles');
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
+      }
+    }
+
+    // Normal (non-copy) flow
+    const stateRequestId = (location as any)?.state?.requestId;
+    const effectiveId = stateRequestId || (idParam as string | null);
+
+    if (!effectiveId) {
+      toast.error('Please complete the main form first before selecting roles.');
+      navigate('/');
+      return;
+    }
+
+    setRequestId(effectiveId);
+
+    // 1) Header details (agency_code feeds BU filter/options)
+    const details = await fetchRequestDetails(effectiveId);
+
+    // 2) Only restore drafts if allowed/asked for
+    if (wantRestore) {
+      const restoredStable = restoreFromStableDraftFor(details);
+      if (!restoredStable && LOG_BLOCKED_RESTORE) {
+        console.log('ℹ️ No stable draft to restore (or none allowed).');
+      }
+    } else if (LOG_BLOCKED_RESTORE) {
+      console.log('⛔ Skipping stable draft restore (not allowed).');
+    }
+
+    // 3) DB hydrate for Edit flow (safe: it only applies if a DB row exists)
+    await fetchExistingSelections(effectiveId);
+
+    // 4) Only overlay id-scoped draft if allowed/asked for
+    if (wantRestore) {
+      restoreFromLocalDraft(effectiveId);
+    } else if (LOG_BLOCKED_RESTORE) {
+      console.log('⛔ Skipping id-scoped draft restore (not allowed).');
+    }
+
+    // 5) Sync + open autosave gate
+    setTimeout(() => {
+      const snap = getValues();
+      reset(snap);
+      isHydratingRef.current = false;
+      console.log('🔁 Final sync after hydration; autosave enabled:', snap);
+    }, 0);
+  })();
+}, [location.state, idParam, navigate, reset, setValue, getValues, clearErrors]);
+
 
   // Back link: save drafts
   const handleBackToMainForm = () => {
