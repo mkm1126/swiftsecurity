@@ -21,7 +21,7 @@ interface User {
   email: string;
   request_id?: string;
 }
- 
+
 type CopyFlowForm = {
   startDate: string;
   employeeName: string;
@@ -45,14 +45,12 @@ type CopyFlowForm = {
 
 function SelectRolesPage() {
   // --- config ---------------------------------------------------------------
-  // Flip to true because you migrated `home_business_unit` to TEXT[]
   const HOME_BU_IS_ARRAY = true;
 
   // --- helpers --------------------------------------------------------------
+  const isHydratingRef = useRef(true);          // gate autosave until hydration completes
+  const didInitRef = useRef(false);             // prevent mount flow from re-running
 
-  const isHydratingRef = useRef(true); // gate autosave until hydration completes
-
-  // snake_case <-> camelCase
   function snakeToCamel(s: string) {
     return s.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
   }
@@ -60,10 +58,9 @@ function SelectRolesPage() {
     return s.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
   }
 
-  // id-scoped draft key
   const draftKey = (id: string) => `selectRoles_draft_${id}`;
 
-  // stable localStorage key (person + agency)
+  const [requestDetails, setRequestDetails] = useState<any>(null);
   const stableStorageKey = (
     details?: { employee_name?: string; agency_name?: string } | null
   ) => {
@@ -72,31 +69,6 @@ function SelectRolesPage() {
     return `selectRoles_${d.employee_name}_${d.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
   };
 
-  // restore from stable draft (using current requestDetails)
-  const restoreFromStableDraft = (): boolean => {
-    const sk = stableStorageKey();
-    if (!sk) return false;
-    const localJson = localStorage.getItem(sk);
-    console.log('🔍 Checking for saved Select Roles form data:', { storageKey: sk, hasSavedData: !!localJson });
-    if (!localJson) return false;
-    try {
-      const data = JSON.parse(localJson);
-      for (const [k, v] of Object.entries(data)) {
-        const isText = /Justification$/.test(k);
-        const typed: any = isText ? String((v as any) ?? '') : v;
-        setValue(k as any, typed as any, { shouldDirty: false });
-      }
-      console.log('📥 Restored Select Roles from saved data (stable key).');
-      toast.success('Previous selections restored');
-      return true;
-    } catch (e) {
-      console.error('Error parsing saved Select Roles data (stable key):', e);
-      localStorage.removeItem(sk);
-      return false;
-    }
-  };
-
-  // restore from stable draft (explicit details, avoids waiting for state)
   const restoreFromStableDraftFor = (
     details: { employee_name?: string; agency_name?: string } | null
   ): boolean => {
@@ -122,7 +94,6 @@ function SelectRolesPage() {
     }
   };
 
-  // apply id-scoped draft on top of current state
   const restoreFromLocalDraft = (id: string) => {
     try {
       const raw = localStorage.getItem(draftKey(id));
@@ -145,14 +116,15 @@ function SelectRolesPage() {
         console.log('🔁 Synced (id-scoped draft) values to UI with reset():', snap);
       }, 0);
 
-      console.log('🧩 Restored local draft for', id, parsed);
-      toast.message('Restored unsaved role selections from this device.');
+      // Show this toast only once per page load
+      if (!didInitRef.current) {
+        toast.message('Restored unsaved role selections from this device.');
+      }
     } catch (e) {
       console.warn('Could not restore local draft:', e);
     }
   };
 
-  // deep coerce "on"/"off" + arrays -> booleans
   const coerceBooleansDeep = (value: any): any => {
     if (value === 'on') return true;
     if (value === 'off') return false;
@@ -170,9 +142,7 @@ function SelectRolesPage() {
     }
     return value;
   };
-
   const strip2 = (k: string) => k.replace(/^[a-z]{2}_/, '');
-
   function normalizeRoleFlagsTrueOnly<T extends Record<string, any>>(flags: T) {
     const out: Record<string, any> = {};
     for (const [key, val] of Object.entries(flags)) {
@@ -184,7 +154,6 @@ function SelectRolesPage() {
     }
     return out as T;
   }
-
   const splitCodes = (val: string | null | undefined, codeLen: number) => {
     if (!val) return [] as string[];
     return String(val)
@@ -195,229 +164,6 @@ function SelectRolesPage() {
       .map((s) => s.replace(/[^A-Z0-9]/g, ''))
       .filter((s) => s.length === codeLen);
   };
-
-  const buildRoleSelectionData = (
-    request_id: string,
-    data: SecurityRoleSelection,
-    options?: { homeBusinessUnitIsArray?: boolean }
-  ) => {
-    const otherBUs = splitCodes((data as any).otherBusinessUnits, 5);
-    const ap1Depts = splitCodes((data as any).apVoucherApprover1RouteControls, 8);
-    const ap2Depts = splitCodes((data as any).apVoucherApprover2RouteControls, 8);
-    const ap3Depts = splitCodes((data as any).apVoucherApprover3RouteControls, 8);
-    const arCreditBUs = splitCodes((data as any).creditInvoiceApprovalBusinessUnits, 5);
-    const arWriteoffBUs = splitCodes((data as any).writeoffApprovalBusinessUnits, 5);
-    const kkAppropriation = splitCodes((data as any).journalApprovalA, 5);
-    const kkTransfer = splitCodes((data as any).transferApproval, 5);
-    const kkExpense = splitCodes((data as any).journalApprovalExpense, 5);
-    const kkRevenue = splitCodes((data as any).journalApprovalRevenue, 5);
-    const amBUs = splitCodes((data as any).physicalInventoryBusinessUnits, 5);
-    const amDept = splitCodes((data as any).physicalInventoryDepartmentIds, 8);
-    const glSources = splitCodes((data as any).glAgencyApproverSources, 3);
-    const poApproverRoute = splitCodes((data as any).poApproverRouteControls, 8);
-
-    const needsDailyReceiptsReport =
-      (data as any).needsDailyReceiptsYes ? true : (data as any).needsDailyReceiptsNo ? false : false;
-
-    const isArray = !!options?.homeBusinessUnitIsArray;
-    const homeBUInput: any = (data as any).homeBusinessUnit;
-    const homeBUValue = Array.isArray(homeBUInput)
-      ? isArray
-        ? homeBUInput
-        : homeBUInput.join(',')
-      : isArray
-      ? homeBUInput
-        ? [homeBUInput]
-        : []
-      : homeBUInput || '';
-
-    const toOrNull = (arr: string[]) => (arr.length ? arr : null);
-
-    const EXTRA_ACCOUNTING_PROCUREMENT_FLAGS = {
-      needs_daily_receipts_yes: (data as any).needsDailyReceiptsYes || false,
-      needs_daily_receipts_no: (data as any).needsDailyReceiptsNo || false,
-      physical_inventory_approval_1: (data as any).physicalInventoryApproval1 || false,
-      physical_inventory_approval_2: (data as any).physicalInventoryApproval2 || false,
-      vendor_request_add_update: (data as any).vendorRequestAddUpdate || false,
-      vendor_inquiry_only: (data as any).vendorInquiryOnly || false,
-      po_epro_buyer: (data as any).poEproBuyer || false,
-      contract_encumbrance: (data as any).contractEncumbrance || false,
-      purchase_order_data_entry: (data as any).purchaseOrderDataEntry || false,
-      epro_requisition_requester: (data as any).eproRequisitionRequester || false,
-      po_accounting_coordinator: (data as any).poAccountingCoordinator || false,
-      core_order_receiver: (data as any).coreOrderReceiver || false,
-      po_inquiry_only: (data as any).poInquiryOnly || false,
-      epro_requisition_inquiry_only: (data as any).eproRequisitionInquiryOnly || false,
-      po_approver: (data as any).poApprover || false,
-      ss_event_creator_buyer: (data as any).ssEventCreatorBuyer || false,
-      ss_create_vendor_response: (data as any).ssCreateVendorResponse || false,
-      ss_event_approver: (data as any).ssEventApprover || false,
-      ss_event_collaborator: (data as any).ssEventCollaborator || false,
-      ss_event_inquiry_only: (data as any).ssEventInquiryOnly || false,
-      ss_all_origins: (data as any).ssAllOrigins || false,
-      ss_tech_coord_approver: (data as any).ssTechCoordApprover || false,
-      ss_tech_state_approver: (data as any).ssTechStateApprover || false,
-      ss_grant_coord_approver: (data as any).ssGrantCoordApprover || false,
-      cg_catalog_owner: (data as any).cgCatalogOwner || false,
-      cg_inquiry_only: (data as any).cgInquiryOnly || false,
-      sc_contract_administrator: (data as any).scContractAdministrator || false,
-      sc_document_administrator: (data as any).scDocumentAdministrator || false,
-      sc_document_collaborator: (data as any).scDocumentCollaborator || false,
-      sc_agreement_manager: (data as any).scAgreementManager || false,
-      sc_agency_library_manager: (data as any).scAgencyLibraryManager || false,
-      sc_contract_inquiry_only: (data as any).scContractInquiryOnly || false,
-      sc_contractual_approver: (data as any).scContractualApprover || false,
-      sc_electronic_docs_yes: (data as any).scElectronicDocsYes || false,
-      sc_electronic_docs_no: (data as any).scElectronicDocsNo || false,
-      sc_doc_contract_coordinator: (data as any).scDocContractCoordinator || false,
-      inventory_express_issue: (data as any).inventoryExpressIssue || false,
-      inventory_adjustment_approver: (data as any).inventoryAdjustmentApprover || false,
-      inventory_replenishment_buyer: (data as any).inventoryReplenishmentBuyer || false,
-      inventory_control_worker: (data as any).inventoryControlWorker || false,
-      inventory_express_putaway: (data as any).inventoryExpressPutaway || false,
-      inventory_fulfillment_specialist: (data as any).inventoryFulfillmentSpecialist || false,
-      inventory_po_receiver: (data as any).inventoryPoReceiver || false,
-      inventory_returns_receiver: (data as any).inventoryReturnsReceiver || false,
-      inventory_cost_adjustment: (data as any).inventoryCostAdjustment || false,
-      inventory_materials_manager: (data as any).inventoryMaterialsManager || false,
-      inventory_delivery: (data as any).inventoryDelivery || false,
-      inventory_inquiry_only: (data as any).inventoryInquiryOnly || false,
-      inventory_configuration_agency: (data as any).inventoryConfigurationAgency || false,
-      inventory_pick_plan_distribution_release: (data as any).inventoryPickPlanDistributionRelease || false,
-    } as const;
-
-    return {
-      request_id,
-      home_business_unit: homeBUValue, // TEXT[] or comma string
-      other_business_units: toOrNull(otherBUs),
-      ...EXTRA_ACCOUNTING_PROCUREMENT_FLAGS,
-
-      // ===== Booleans / strings preserved =====
-      voucher_entry: (data as any).voucherEntry || false,
-      maintenance_voucher_build_errors: (data as any).maintenanceVoucherBuildErrors || false,
-      match_override: (data as any).matchOverride || false,
-      ap_inquiry_only: (data as any).apInquiryOnly || false,
-
-      cash_maintenance: (data as any).cashMaintenance || false,
-      receivable_specialist: (data as any).receivableSpecialist || false,
-      receivable_supervisor: (data as any).receivableSupervisor || false,
-      billing_create: (data as any).billingCreate || false,
-      billing_specialist: (data as any).billingSpecialist || false,
-      billing_supervisor: (data as any).billingSupervisor || false,
-      customer_maintenance_specialist: (data as any).customerMaintenanceSpecialist || false,
-      ar_billing_setup: (data as any).arBillingSetup || false,
-      ar_billing_inquiry_only: (data as any).arBillingInquiryOnly || false,
-      cash_management_inquiry_only: (data as any).cashManagementInquiryOnly || false,
-
-      budget_journal_entry_online: (data as any).budgetJournalEntryOnline || false,
-      budget_journal_load: (data as any).budgetJournalLoad || false,
-
-      journal_approver_appr: (data as any).journalApproverAppr || false,
-      journal_approver_exp: (data as any).journalApproverExp || false,
-      journal_approver_rev: (data as any).journalApproverRev || false,
-
-      budget_transfer_entry_online: (data as any).budgetTransferEntryOnline || false,
-      transfer_approver: (data as any).transferApprover || false,
-      budget_inquiry_only: (data as any).budgetInquiryOnly || false,
-
-      journal_entry_online: (data as any).journalEntryOnline || false,
-      journal_load: (data as any).journalLoad || false,
-      agency_chartfield_maintenance: (data as any).agencyChartfieldMaintenance || false,
-      gl_agency_approver: (data as any).glAgencyApprover || false,
-      general_ledger_inquiry_only: (data as any).generalLedgerInquiryOnly || false,
-      nvision_reporting_agency_user: (data as any).nvisionReportingAgencyUser || false,
-
-      needs_daily_receipts_report: needsDailyReceiptsReport,
-
-      award_data_entry: (data as any).awardDataEntry || false,
-      grant_fiscal_manager: (data as any).grantFiscalManager || false,
-      program_manager: (data as any).programManager || false,
-      gm_agency_setup: (data as any).gmAgencySetup || false,
-      grants_inquiry_only: (data as any).grantsInquiryOnly || false,
-
-      federal_project_initiator: (data as any).federalProjectInitiator || false,
-      oim_initiator: (data as any).oimInitiator || false,
-      project_initiator: (data as any).projectInitiator || false,
-      project_manager: (data as any).projectManager || false,
-      capital_programs_office: (data as any).capitalProgramsOffice || false,
-      project_cost_accountant: (data as any).projectCostAccountant || false,
-      project_fixed_asset: (data as any).projectFixedAsset || false,
-      category_subcategory_manager: (data as any).categorySubcategoryManager || false,
-      project_control_dates: (data as any).projectControlDates || false,
-      project_accounting_systems: (data as any).projectAccountingSystems || false,
-      mndot_projects_inquiry: (data as any).mndotProjectsInquiry || false,
-      projects_inquiry_only: (data as any).projectsInquiryOnly || false,
-      mndot_project_approver: (data as any).mndotProjectApprover || false,
-      route_control: (data as any).routeControl || null,
-
-      cost_allocation_inquiry_only: (data as any).costAllocationInquiryOnly || false,
-
-      financial_accountant_assets: (data as any).financialAccountantAssets || false,
-      asset_management_inquiry_only: (data as any).assetManagementInquiryOnly || false,
-
-      role_justification: (data as any).roleJustification || null,
-
-      // ===== ARRAY (TEXT[]) =====
-      ap_voucher_approver_1: (data as any).apVoucherApprover1 || false,
-      ap_voucher_approver_2: (data as any).apVoucherApprover2 || false,
-      ap_voucher_approver_3: (data as any).apVoucherApprover3 || false,
-      ap_voucher_approver_1_route_controls: splitCodes((data as any).apVoucherApprover1RouteControls, 8) || null,
-      ap_voucher_approver_2_route_controls: splitCodes((data as any).apVoucherApprover2RouteControls, 8) || null,
-      ap_voucher_approver_3_route_controls: splitCodes((data as any).apVoucherApprover3RouteControls, 8) || null,
-
-      credit_invoice_approval_business_units: splitCodes((data as any).creditInvoiceApprovalBusinessUnits, 5) || null,
-      writeoff_approval_business_units: splitCodes((data as any).writeoffApprovalBusinessUnits, 5) || null,
-
-      appropriation_sources: splitCodes((data as any).journalApprovalA, 5) || null,
-      transfer_appropriation_sources: splitCodes((data as any).transferApproval, 5) || null,
-      expense_budget_source: splitCodes((data as any).journalApprovalExpense, 5) || null,
-      revenue_budget_source: splitCodes((data as any).journalApprovalRevenue, 5) || null,
-
-      physical_inventory_business_units: splitCodes((data as any).physicalInventoryBusinessUnits, 5) || null,
-      physical_inventory_department_ids: splitCodes((data as any).physicalInventoryDepartmentIds, 8) || null,
-
-      gl_agency_approver_sources: splitCodes((data as any).glAgencyApproverSources, 3) || null,
-
-      po_approver_route_controls: splitCodes((data as any).poApproverRouteControls, 8) || null,
-
-      role_selection_json: {
-        ...(data as any),
-      },
-    };
-  };
-
-  const setDailyReceipts = (answer: 'yes' | 'no') => {
-    if (answer === 'yes') {
-      setValue('needsDailyReceiptsYes' as any, true, { shouldDirty: true });
-      setValue('needsDailyReceiptsNo' as any, false, { shouldDirty: true });
-    } else {
-      setValue('needsDailyReceiptsYes' as any, false, { shouldDirty: true });
-      setValue('needsDailyReceiptsNo' as any, true, { shouldDirty: true });
-    }
-  };
-
-  const rcInputClasses =
-    'w-56 h-10 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm placeholder:text-gray-400';
-  const inputStd =
-    'h-10 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm placeholder:text-gray-400';
-
-  // --- state & form ---------------------------------------------------------
-
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { id: idParam } = useParams<{ id: string }>(); // prefer URL param as source of truth
-
-  const [saving, setSaving] = useState(false);
-  const [requestId, setRequestId] = useState<string | null>(null);
-  const [requestDetails, setRequestDetails] = useState<any>(null);
-  const [loadingExistingData, setLoadingExistingData] = useState(false);
-  const [availableBusinessUnits, setAvailableBusinessUnits] = useState<any[]>([]);
-  const [hasExistingDbSelections, setHasExistingDbSelections] = useState(false);
-  const [restoredFromLocalStorage, setRestoredFromLocalStorage] = useState(false);
-  const homeBusinessUnitRef = useRef<HTMLDivElement | null>(null);
 
   const {
     register,
@@ -431,35 +177,70 @@ function SelectRolesPage() {
     formState: { errors },
   } = useForm<SecurityRoleSelection>({
     defaultValues: {
-      homeBusinessUnit: [] as any, // array (TEXT[]) mode
+      homeBusinessUnit: [] as any,
       otherBusinessUnits: '' as any,
     } as any,
     shouldUnregister: false,
   });
 
-  const selectedRoles = watch();
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { id: idParam } = useParams<{ id: string }>();
 
-  const hasSelectedRoles = React.useMemo(() => {
-    return Object.entries(selectedRoles || {}).some(
-      ([, value]) => typeof value === 'boolean' && value === true
-    );
-  }, [selectedRoles]);
+  const [saving, setSaving] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const [availableBusinessUnits, setAvailableBusinessUnits] = useState<any[]>([]);
+  const [hasExistingDbSelections, setHasExistingDbSelections] = useState(false);
+  const homeBusinessUnitRef = useRef<HTMLDivElement | null>(null);
 
-  // BU options (filtered by agency if present)
+  // 🔄 Autosave: subscribe to changes instead of putting watch() in deps
+  useEffect(() => {
+    if (!requestId) return;
+    const subscription = watch((formData) => {
+      if (isHydratingRef.current || isEditingCopiedRoles) return;
+      try {
+        const payload = { ts: Date.now(), data: getValues() };
+        localStorage.setItem(draftKey(requestId), JSON.stringify(payload));
+        const sk = stableStorageKey();
+        if (sk) localStorage.setItem(sk, JSON.stringify(getValues()));
+      } catch {}
+    });
+    return () => subscription.unsubscribe();
+  }, [requestId, isEditingCopiedRoles, watch, getValues]);
+
+  // MultiSelect options (prefer DB, fallback to static)
   const businessUnitOptions = React.useMemo(() => {
-    const agencyCode = requestDetails?.agency_code;
-    if (!agencyCode) {
-      return businessUnits.map((unit) => ({
-        value: unit.businessUnit,
-        label: `${unit.description} (${unit.businessUnit})`,
+    if (availableBusinessUnits && availableBusinessUnits.length > 0) {
+      return availableBusinessUnits.map((u) => ({
+        value: u.business_unit_code,
+        label: `${u.business_unit_name} (${u.business_unit_code})`,
       }));
     }
-    const filteredUnits = businessUnits.filter((unit) => unit.businessUnit.startsWith(agencyCode));
-    return filteredUnits.map((unit) => ({
-      value: unit.businessUnit,
-      label: `${unit.description} (${unit.businessUnit})`,
+    const agencyCode = requestDetails?.agency_code;
+    const list = agencyCode
+      ? businessUnits.filter((u) => u.businessUnit.startsWith(agencyCode))
+      : businessUnits;
+    return list.map((u) => ({
+      value: u.businessUnit,
+      label: `${u.description} (${u.businessUnit})`,
     }));
-  }, [requestDetails?.agency_code]);
+  }, [availableBusinessUnits, requestDetails?.agency_code]);
+
+  const resolveBusinessUnitLabel = React.useCallback(
+    (code: string) => {
+      const hitDb = availableBusinessUnits?.find?.(
+        (u: any) => u.business_unit_code === code
+      );
+      if (hitDb) return `${hitDb.business_unit_name} (${hitDb.business_unit_code})`;
+      const hitStatic = businessUnits.find((u) => u.businessUnit === code);
+      if (hitStatic) return `${hitStatic.description} (${hitStatic.businessUnit})`;
+      return code;
+    },
+    [availableBusinessUnits]
+  );
 
   const handleBusinessUnitChange = (selectedCodes: string[]) => {
     setValue('homeBusinessUnit' as any, selectedCodes, {
@@ -468,13 +249,9 @@ function SelectRolesPage() {
     });
     clearErrors('homeBusinessUnit' as any);
   };
-
-  const handleUserChange = (user: User | null) => {
-    setSelectedUser(user);
-  };
+  const handleUserChange = (user: User | null) => setSelectedUser(user);
 
   // --- data fetching --------------------------------------------------------
-
   const fetchRequestDetails = async (
     id: string
   ): Promise<{ employee_name?: string; agency_name?: string; agency_code?: string } | null> => {
@@ -487,11 +264,7 @@ function SelectRolesPage() {
       if (error) throw error;
       const first = Array.isArray(data) ? data[0] : data;
       setRequestDetails(first || null);
-
-      if (first?.agency_code) {
-        await fetchBusinessUnitsForAgency(first.agency_code);
-      }
-
+      if (first?.agency_code) await fetchBusinessUnitsForAgency(first.agency_code);
       return first || null;
     } catch (error) {
       console.error('Error fetching request details:', error);
@@ -507,18 +280,17 @@ function SelectRolesPage() {
         .select('business_unit_code, business_unit_name')
         .eq('agency_code', agencyCode)
         .order('business_unit_name');
-
       if (error) throw error;
       setAvailableBusinessUnits(data || []);
     } catch (error) {
       console.error('Error fetching business units for agency:', error);
-      const fallbackUnits = businessUnits
-        .filter((unit) => unit.businessUnit.startsWith(agencyCode))
-        .map((unit) => ({
-          business_unit_code: unit.businessUnit,
-          business_unit_name: unit.description,
+      const fallback = businessUnits
+        .filter((u) => u.businessUnit.startsWith(agencyCode))
+        .map((u) => ({
+          business_unit_code: u.businessUnit,
+          business_unit_name: u.description,
         }));
-      setAvailableBusinessUnits(fallbackUnits);
+      setAvailableBusinessUnits(fallback);
     }
   };
 
@@ -529,7 +301,6 @@ function SelectRolesPage() {
         .select('*')
         .eq('request_id', id)
         .maybeSingle();
-
       if (error) throw error;
 
       if (data) {
@@ -538,19 +309,18 @@ function SelectRolesPage() {
 
         for (const [k, v] of Object.entries(data)) {
           if (['id', 'request_id', 'created_at', 'updated_at', 'role_selection_json'].includes(k)) continue;
-
           if (Array.isArray(v)) {
             const camel = snakeToCamel(k);
             setValue(camel as any, v.join(', '), { shouldDirty: false });
             continue;
           }
-
           if (typeof v === 'boolean') {
             if (v === true) {
               const camel = snakeToCamel(k);
               setValue(camel as any, true as any, { shouldDirty: false });
               const suffixCamel = snakeToCamel(strip2(k));
-              if (suffixCamel !== camel) {
+              if (
+                suffixCamel !== camel) {
                 setValue(suffixCamel as any, true as any, { shouldDirty: false });
               }
             }
@@ -843,50 +613,6 @@ function SelectRolesPage() {
                       />
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Business Unit Information */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
-                  Business Unit Information
-                </h3>
-
-                <div ref={homeBusinessUnitRef}>
-                  <MultiSelect
-                    options={businessUnitOptions}
-                    value={watch('homeBusinessUnit' as any) || []}
-                    onChange={handleBusinessUnitChange}
-                    placeholder="Select business units..."
-                    label="Home Business Unit"
-                    required
-                    error={(errors as any).homeBusinessUnit?.message}
-                    searchPlaceholder="Search business units..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Selected Business Units:
-                  </label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {(() => {
-                      const watchedValue: any = watch('homeBusinessUnit' as any);
-                      const businessUnitsArray = Array.isArray(watchedValue)
-                        ? watchedValue
-                        : watchedValue
-                        ? [watchedValue]
-                        : [];
-                      return (
-                        businessUnitsArray
-                          .map((code: string) => {
-                            const unit = businessUnits.find((u) => u.businessUnit === code);
-                            return unit ? `${unit.description} (${unit.businessUnit})` : code;
-                          })
-                          .join(', ') || 'None selected'
-                      );
-                    })()}
-                  </p>
                 </div>
               </div>
 
