@@ -58,6 +58,14 @@ function SelectRolesPage() {
     return s.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
   }
 
+  // standard input class names used throughout the form
+  const rcInputClasses =
+    'w-56 h-10 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm placeholder:text-gray-400';
+  
+  const inputStd =
+    'h-10 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm placeholder:text-gray-400';
+
+  
   const draftKey = (id: string) => `selectRoles_draft_${id}`;
 
   const [requestDetails, setRequestDetails] = useState<any>(null);
