@@ -44,31 +44,30 @@ function camelizeKeys<T extends Record<string, any>>(obj: T | null | undefined):
 
 /** Build a normalized roles payload expected by SelectRolesPage.
  *  Prefers role_selection_json if present; falls back to top-level columns.
- *  Ensures camelCase keys and strips non-role metadata.
+ *  Ensures camelCase keys, strips non-role metadata, and coerces list fields to arrays.
  */
 function normalizeRoles(roleSelections: any): Record<string, any> {
   if (!roleSelections) return {};
 
+  // choose source: role_selection_json > raw columns
   const json =
-    roleSelections?.role_selection_json && Object.keys(roleSelections.role_selection_json).length > 0
+    (roleSelections?.role_selection_json &&
+      Object.keys(roleSelections.role_selection_json).length > 0)
       ? roleSelections.role_selection_json
       : roleSelections;
 
   const excluded = new Set([
-    'id',
-    'created_at',
-    'updated_at',
-    'request_id',
-    'role_justification',
-    'roleJustification',
+    'id', 'created_at', 'updated_at', 'request_id',
+    'role_justification', 'roleJustification'
   ]);
 
+  // camelize 1 level
   const base = camelizeKeys(json);
   for (const k of Object.keys(base)) {
     if (excluded.has(k)) delete base[k];
   }
 
-  // Map common snake_case to expected camelCase aliases if needed
+  // also copy top-level snake_case list fields if the camelCase isn’t present
   if (roleSelections?.home_business_unit && !base.homeBusinessUnit) {
     base.homeBusinessUnit = roleSelections.home_business_unit;
   }
@@ -76,25 +75,52 @@ function normalizeRoles(roleSelections: any): Record<string, any> {
     base.otherBusinessUnits = roleSelections.other_business_units;
   }
 
-  // 🔧 ALWAYS normalize homeBusinessUnit to string[]
-  const rawHBU =
+  // if _parsed_multi exists inside role_selection_json, prefer its structured arrays
+  const parsedMulti =
+    roleSelections?.role_selection_json?._parsed_multi ||
+    json?._parsed_multi ||
+    base?._parsed_multi;
+
+  // --- coerce list-ish fields to string[] ---
+  const toArray = (val: unknown): string[] => {
+    if (Array.isArray(val)) return val.map(String).map(s => s.trim()).filter(Boolean);
+    if (typeof val === 'string') {
+      // split on comma or newline
+      return val.split(/[,\n]/g).map(s => s.trim()).filter(Boolean);
+    }
+    if (val == null) return [];
+    // numbers/booleans/etc -> string
+    return [String(val)].filter(Boolean);
+  };
+
+  // homeBusinessUnit from multiple possible places, in priority order:
+  let homeBU: any =
+    parsedMulti?.homeBusinessUnit ??
     base.homeBusinessUnit ??
     json.homeBusinessUnit ??
-    roleSelections.home_business_unit ??
-    null;
+    json.home_business_unit ??
+    roleSelections?.home_business_unit;
 
-  let hbuArray: string[] = [];
-  if (Array.isArray(rawHBU)) {
-    hbuArray = rawHBU.filter(Boolean);
-  } else if (typeof rawHBU === 'string' && rawHBU.trim()) {
-    // handles comma or whitespace separated strings
-    hbuArray = rawHBU.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+  base.homeBusinessUnit = toArray(homeBU);
+
+  // keep a plural alias just in case the form code reads the plural
+  if (!base.homeBusinessUnits) {
+    base.homeBusinessUnits = base.homeBusinessUnit;
   }
-  base.homeBusinessUnit = hbuArray;
+
+  // otherBusinessUnits is usually a free-text string; normalize to a trimmed string
+  if (base.otherBusinessUnits == null) {
+    const ob =
+      json.otherBusinessUnits ??
+      json.other_business_units ??
+      roleSelections?.other_business_units ?? '';
+    base.otherBusinessUnits = (typeof ob === 'string') ? ob.trim() : String(ob ?? '');
+  } else if (typeof base.otherBusinessUnits !== 'string') {
+    base.otherBusinessUnits = String(base.otherBusinessUnits ?? '');
+  }
 
   return base;
 }
-
 
 /** Try to find the most recent/complete "main form" draft in localStorage. */
 function findLatestMainFormDraft(): any | null {
