@@ -185,7 +185,7 @@ function UserSelect({
     return '/select-roles';
   };
 
-  const persistCopyContext = (payload: {
+    const persistCopyContext = (payload: {
     pendingFormData: any,
     roleSelections: any,
     userDetails: any,
@@ -194,24 +194,28 @@ function UserSelect({
     const { pendingFormData, roleSelections, userDetails, mode } = payload;
     const normalizedRoles = normalizeRoles(roleSelections);
 
-    // Guarantee the flags + keys that SelectRolesPage looks for
-    localStorage.setItem('isCopyFlow', 'true');
-    localStorage.setItem('editingCopiedRoles', mode === 'editCopied' ? 'true' : 'true'); // keep same flag used elsewhere
+    // ✨ Use sessionStorage so a refresh/new tab doesn't carry stale data
+    const S = window.sessionStorage;
 
-    // Save both a raw and normalized version to be future-proof
-    localStorage.setItem('pendingFormData', JSON.stringify(pendingFormData));
-    localStorage.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData)); // some pages referenced this earlier
-    localStorage.setItem('copiedRoleSelectionsRaw', JSON.stringify(roleSelections || {}));
-    localStorage.setItem('copiedRoleSelections', JSON.stringify(normalizedRoles));
+    // Flags
+    S.setItem('isCopyFlow', 'true');
+    S.setItem('editingCopiedRoles', mode === 'editCopied' ? 'true' : 'true');
 
-    localStorage.setItem('copiedUserDetails', JSON.stringify({
+    // Payloads (save both raw + normalized to be future-proof)
+    S.setItem('pendingFormData', JSON.stringify(pendingFormData));
+    S.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData));
+    S.setItem('copiedRoleSelectionsRaw', JSON.stringify(roleSelections || {}));
+    S.setItem('copiedRoleSelections', JSON.stringify(normalizedRoles));
+
+    // Minimal user details (source of copy)
+    S.setItem('copiedUserDetails', JSON.stringify({
       id: userDetails?.id ?? null,
       email: userDetails?.email ?? null,
       employee_name: userDetails?.employee_name ?? null,
       employee_id: userDetails?.employee_id ?? null,
     }));
 
-    localStorage.setItem('copyFlowSource', JSON.stringify({
+    S.setItem('copyFlowSource', JSON.stringify({
       createdFromRequestId: userDetails?.id ?? null,
       createdAt: new Date().toISOString()
     }));
@@ -224,7 +228,7 @@ function UserSelect({
 
     return { normalizedRoles };
   };
-
+  
   const handleEditRoles = () => {
     if (!selectedUser || !userDetails) {
       console.error('No user selected or user details not loaded');
