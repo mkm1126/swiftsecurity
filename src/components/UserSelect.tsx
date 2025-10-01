@@ -234,7 +234,7 @@ function UserSelect({
     return '/select-roles';
   };
 
-    const persistCopyContext = (payload: {
+  const persistCopyContext = (payload: {
     pendingFormData: any,
     roleSelections: any,
     userDetails: any,
@@ -242,41 +242,44 @@ function UserSelect({
   }) => {
     const { pendingFormData, roleSelections, userDetails, mode } = payload;
     const normalizedRoles = normalizeRoles(roleSelections);
-
-    // ✨ Use sessionStorage so a refresh/new tab doesn't carry stale data
-    const S = window.sessionStorage;
-
-    // Flags
-    S.setItem('isCopyFlow', 'true');
-    S.setItem('editingCopiedRoles', mode === 'editCopied' ? 'true' : 'true');
-
-    // Payloads (save both raw + normalized to be future-proof)
-    S.setItem('pendingFormData', JSON.stringify(pendingFormData));
-    S.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData));
-    S.setItem('copiedRoleSelectionsRaw', JSON.stringify(roleSelections || {}));
-    S.setItem('copiedRoleSelections', JSON.stringify(normalizedRoles));
-
-    // Minimal user details (source of copy)
-    S.setItem('copiedUserDetails', JSON.stringify({
+  
+    // flags the role page listens for
+    localStorage.setItem('isCopyFlow', 'true');
+    localStorage.setItem('editingCopiedRoles', mode === 'editCopied' ? 'true' : 'true');
+  
+    // save raw + normalized versions
+    localStorage.setItem('pendingFormData', JSON.stringify(pendingFormData));
+    localStorage.setItem('pendingFormDataRaw', JSON.stringify(pendingFormData));
+    localStorage.setItem('copiedRoleSelectionsRaw', JSON.stringify(roleSelections || {}));
+    localStorage.setItem('copiedRoleSelections', JSON.stringify(normalizedRoles));
+  
+    // small extra: mirror homeBusinessUnit under plural key too (defensive)
+    if (normalizedRoles?.homeBusinessUnit && !normalizedRoles.homeBusinessUnits) {
+      const clone = { ...normalizedRoles, homeBusinessUnits: normalizedRoles.homeBusinessUnit };
+      localStorage.setItem('copiedRoleSelections', JSON.stringify(clone));
+    }
+  
+    localStorage.setItem('copiedUserDetails', JSON.stringify({
       id: userDetails?.id ?? null,
       email: userDetails?.email ?? null,
       employee_name: userDetails?.employee_name ?? null,
       employee_id: userDetails?.employee_id ?? null,
     }));
-
-    S.setItem('copyFlowSource', JSON.stringify({
+  
+    localStorage.setItem('copyFlowSource', JSON.stringify({
       createdFromRequestId: userDetails?.id ?? null,
       createdAt: new Date().toISOString()
     }));
-
+  
     log('📦 Copy/Edit flow context saved:', {
       pendingFormData,
       normalizedRolesKeys: Object.keys(normalizedRoles),
       mode
     });
-
+  
     return { normalizedRoles };
   };
+
   
   const handleEditRoles = () => {
     if (!selectedUser || !userDetails) {
