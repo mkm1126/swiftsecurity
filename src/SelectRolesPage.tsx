@@ -950,6 +950,185 @@ function SelectRolesPage() {
                 </div>
               </div>
 
+              {/* Accounts Payable — unified single table */}
+              <div className="space-y-6">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300">
+                    {/* Top blue header */}
+                    <thead style={{ backgroundColor: '#003865' }}>
+                      <tr>
+                        <th
+                          scope="col"
+                          colSpan={2}
+                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                        >
+                          ACCOUNTS PAYABLE (AP)
+                          <br />
+                          <span className="normal-case font-normal">
+                            (See also Vendor and Purchasing below)
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
+
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {/* AP basic role checkboxes */}
+                      <tr>
+                        <td className="px-6 py-4" colSpan={2}>
+                          <div className="grid grid-cols-2 gap-6">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('voucherEntry' as any)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">Voucher Entry</span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('maintenanceVoucherBuildErrors' as any)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">
+                                Maintenance of Voucher Build Errors
+                              </span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('matchOverride' as any)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">Match Override</span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                {...register('apInquiryOnly' as any)}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">Accounts Payable Inquiry Only</span>
+                            </label>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* In-table blue subheader for Workflow Roles */}
+                      <tr>
+                        <th
+                          colSpan={2}
+                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
+                          style={{ backgroundColor: '#003865' }}
+                        >
+                          WORKFLOW ROLES
+                        </th>
+                      </tr>
+
+                      {/* Workflow header row */}
+                      <tr>
+                        <td className="px-4 py-2 bg-gray-100 font-medium text-sm w-56 whitespace-nowrap">
+                          Role
+                        </td>
+                        <td className="px-4 py-2 bg-gray-100 font-medium text-sm">
+                          Route Controls: Financial Department ID(s)
+                          <div className="text-xs italic text-gray-600 mt-1">
+                            (8 characters each; separate with commas || new lines)
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Voucher Approver 1 */}
+                      <tr>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('apVoucherApprover1' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Voucher Approver 1
+                          </label>
+                        </td>
+                        <td className="px-4 py-3">
+                          <textarea
+                            rows={2}
+                            {...register('apVoucherApprover1RouteControls' as any, {
+                              setValueAs: (v: string) =>
+                                (v ?? '')
+                                  .split(/[,\s]+/)
+                                  .map(s => s.trim().toUpperCase())
+                                  .filter(Boolean)
+                                  .join(','),
+                            })}
+                            placeholder="e.g. 12345678, 23456789 (or one per line)"
+                            className="w-full md:w-3/4 rounded-md border border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                          />
+                        </td>
+                      </tr>
+
+                      {/* Voucher Approver 2 */}
+                      <tr>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('apVoucherApprover2' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Voucher Approver 2
+                          </label>
+                        </td>
+                        <td className="px-4 py-3">
+                          <textarea
+                            rows={2}
+                            {...register('apVoucherApprover2RouteControls' as any, {
+                              setValueAs: (v: string) =>
+                                (v ?? '')
+                                  .split(/[,\s]+/)
+                                  .map(s => s.trim().toUpperCase())
+                                  .filter(Boolean)
+                                  .join(','),
+                            })}
+                            placeholder="e.g. 12345678, 23456789 (or one per line)"
+                            className="w-full md:w-3/4 rounded-md border border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                          />
+                        </td>
+                      </tr>
+
+                      {/* Voucher Approver 3 */}
+                      <tr>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              {...register('apVoucherApprover3' as any)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
+                            />
+                            Voucher Approver 3
+                          </label>
+                        </td>
+                        <td className="px-4 py-3">
+                          <textarea
+                            rows={2}
+                            {...register('apVoucherApprover3RouteControls' as any, {
+                              setValueAs: (v: string) =>
+                                (v ?? '')
+                                  .split(/[,\s]+/)
+                                  .map(s => s.trim().toUpperCase())
+                                  .filter(Boolean)
+                                  .join(','),
+                            })}
+                            placeholder="e.g. 12345678, 23456789 (or one per line)"
+                            className="w-full md:w-3/4 rounded-md border border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               {/* Accounts Receivable (AR) and Cash Management (CM) */}
               <div className="space-y-6">
                 <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
