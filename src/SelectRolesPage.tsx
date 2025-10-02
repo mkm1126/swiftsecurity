@@ -46,22 +46,17 @@ type CopyFlowForm = {
 function SelectRolesPage() {
   // --- config ---------------------------------------------------------------
   const HOME_BU_IS_ARRAY = true;
-
-  // Disable auto-restore unless explicitly asked via router state.
+  // Do not auto-restore drafts unless explicitly requested via router state.
   const ALLOW_AUTO_RESTORE = false;
 
   // --- helpers --------------------------------------------------------------
   const isHydratingRef = useRef(true);
 
-  function snakeToCamel(s: string) {
-    return s.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
-  }
-  function camelToSnake(s: string) {
-    return s.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
-  }
+  const snakeToCamel = (s: string) => s.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
+  const camelToSnake = (s: string) => s.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
   const strip2 = (k: string) => k.replace(/^[a-z]{2}_/, '');
 
-  // Draft keys
+  // localStorage keys
   const draftKey = (id: string) => `selectRoles_draft_${id}`;
   const stableStorageKey = (details?: { employee_name?: string; agency_name?: string } | null) => {
     const d = details ?? requestDetails;
@@ -69,7 +64,7 @@ function SelectRolesPage() {
     return `selectRoles_${d.employee_name}_${d.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
   };
 
-  // Hard reset: removes every localStorage key that starts with 'selectRoles_'
+  // Hard reset: remove any selectRoles_* keys
   const clearAllRoleDrafts = () => {
     const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -79,7 +74,7 @@ function SelectRolesPage() {
     keys.forEach((k) => localStorage.removeItem(k));
   };
 
-  // Restore stable draft
+  // Optional draft restore (stable)
   const restoreFromStableDraftFor = (
     details: { employee_name?: string; agency_name?: string } | null
   ): boolean => {
@@ -101,7 +96,7 @@ function SelectRolesPage() {
     }
   };
 
-  // Restore id-scoped draft
+  // Optional draft restore (id-scoped)
   const restoreFromLocalDraft = (id: string) => {
     try {
       const raw = localStorage.getItem(draftKey(id));
@@ -118,7 +113,6 @@ function SelectRolesPage() {
         }
       }
 
-      // no toast spam
       setTimeout(() => {
         const snap = getValues();
         reset(snap);
@@ -263,10 +257,13 @@ function SelectRolesPage() {
       home_business_unit: homeBUValue,
       other_business_units: toOrNull(otherBUs),
       ...EXTRA_ACCOUNTING_PROCUREMENT_FLAGS,
+
+      // ----- booleans / strings -----
       voucher_entry: (data as any).voucherEntry || false,
       maintenance_voucher_build_errors: (data as any).maintenanceVoucherBuildErrors || false,
       match_override: (data as any).matchOverride || false,
       ap_inquiry_only: (data as any).apInquiryOnly || false,
+
       cash_maintenance: (data as any).cashMaintenance || false,
       receivable_specialist: (data as any).receivableSpecialist || false,
       receivable_supervisor: (data as any).receivableSupervisor || false,
@@ -277,26 +274,33 @@ function SelectRolesPage() {
       ar_billing_setup: (data as any).arBillingSetup || false,
       ar_billing_inquiry_only: (data as any).arBillingInquiryOnly || false,
       cash_management_inquiry_only: (data as any).cashManagementInquiryOnly || false,
+
       budget_journal_entry_online: (data as any).budgetJournalEntryOnline || false,
       budget_journal_load: (data as any).budgetJournalLoad || false,
+
       journal_approver_appr: (data as any).journalApproverAppr || false,
       journal_approver_exp: (data as any).journalApproverExp || false,
       journal_approver_rev: (data as any).journalApproverRev || false,
+
       budget_transfer_entry_online: (data as any).budgetTransferEntryOnline || false,
       transfer_approver: (data as any).transferApprover || false,
       budget_inquiry_only: (data as any).budgetInquiryOnly || false,
+
       journal_entry_online: (data as any).journalEntryOnline || false,
       journal_load: (data as any).journalLoad || false,
       agency_chartfield_maintenance: (data as any).agencyChartfieldMaintenance || false,
       gl_agency_approver: (data as any).glAgencyApprover || false,
       general_ledger_inquiry_only: (data as any).generalLedgerInquiryOnly || false,
       nvision_reporting_agency_user: (data as any).nvisionReportingAgencyUser || false,
+
       needs_daily_receipts_report: needsDailyReceiptsReport,
+
       award_data_entry: (data as any).awardDataEntry || false,
       grant_fiscal_manager: (data as any).grantFiscalManager || false,
       program_manager: (data as any).programManager || false,
       gm_agency_setup: (data as any).gmAgencySetup || false,
       grants_inquiry_only: (data as any).grantsInquiryOnly || false,
+
       federal_project_initiator: (data as any).federalProjectInitiator || false,
       oim_initiator: (data as any).oimInitiator || false,
       project_initiator: (data as any).projectInitiator || false,
@@ -311,35 +315,48 @@ function SelectRolesPage() {
       projects_inquiry_only: (data as any).projectsInquiryOnly || false,
       mndot_project_approver: (data as any).mndotProjectApprover || false,
       route_control: (data as any).routeControl || null,
+
       cost_allocation_inquiry_only: (data as any).costAllocationInquiryOnly || false,
+
       financial_accountant_assets: (data as any).financialAccountantAssets || false,
       asset_management_inquiry_only: (data as any).assetManagementInquiryOnly || false,
+
       role_justification: (data as any).roleJustification || null,
+
+      // ----- arrays (TEXT[]) -----
       ap_voucher_approver_1: (data as any).apVoucherApprover1 || false,
       ap_voucher_approver_2: (data as any).apVoucherApprover2 || false,
       ap_voucher_approver_3: (data as any).apVoucherApprover3 || false,
       ap_voucher_approver_1_route_controls: splitCodes((data as any).apVoucherApprover1RouteControls, 8) || null,
       ap_voucher_approver_2_route_controls: splitCodes((data as any).apVoucherApprover2RouteControls, 8) || null,
       ap_voucher_approver_3_route_controls: splitCodes((data as any).apVoucherApprover3RouteControls, 8) || null,
+
       credit_invoice_approval_business_units: splitCodes((data as any).creditInvoiceApprovalBusinessUnits, 5) || null,
       writeoff_approval_business_units: splitCodes((data as any).writeoffApprovalBusinessUnits, 5) || null,
+
       appropriation_sources: splitCodes((data as any).journalApprovalA, 5) || null,
       transfer_appropriation_sources: splitCodes((data as any).transferApproval, 5) || null,
       expense_budget_source: splitCodes((data as any).journalApprovalExpense, 5) || null,
       revenue_budget_source: splitCodes((data as any).journalApprovalRevenue, 5) || null,
+
       physical_inventory_business_units: splitCodes((data as any).physicalInventoryBusinessUnits, 5) || null,
       physical_inventory_department_ids: splitCodes((data as any).physicalInventoryDepartmentIds, 8) || null,
+
       gl_agency_approver_sources: splitCodes((data as any).glAgencyApproverSources, 3) || null,
+
       po_approver_route_controls: splitCodes((data as any).poApproverRouteControls, 8) || null,
+
       role_selection_json: { ...(data as any) },
     };
   };
 
+  // daily receipts helper
   const setDailyReceipts = (answer: 'yes' | 'no') => {
     setValue('needsDailyReceiptsYes' as any, answer === 'yes', { shouldDirty: true });
     setValue('needsDailyReceiptsNo' as any, answer !== 'yes', { shouldDirty: true });
   };
 
+  // small UI helpers
   const rcInputClasses =
     'w-56 h-10 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm placeholder:text-gray-400';
   const inputStd =
@@ -378,9 +395,10 @@ function SelectRolesPage() {
     shouldUnregister: false,
   });
 
+  // keep this early so it's defined before any effects read it
   const selectedRoles = watch();
 
-  // Prefer agency-specific BUs from DB; fallback to bundled list.
+  // BU options — prefer DB list, fallback to bundled list (filtered by agency)
   const businessUnitOptions = React.useMemo(() => {
     if (availableBusinessUnits.length > 0) {
       return availableBusinessUnits.map((u) => ({
@@ -389,9 +407,7 @@ function SelectRolesPage() {
       }));
     }
     const code = requestDetails?.agency_code;
-    const src = code
-      ? businessUnits.filter((bu) => bu.businessUnit.startsWith(code))
-      : businessUnits;
+    const src = code ? businessUnits.filter((bu) => bu.businessUnit.startsWith(code)) : businessUnits;
     return src.map((unit) => ({
       value: unit.businessUnit,
       label: `${unit.description} (${unit.businessUnit})`,
@@ -499,7 +515,7 @@ function SelectRolesPage() {
     }
   };
 
-  // --- local draft persistence ---------------------------------------------
+  // --- local draft persistence (still allowed; restore is opt-in) ----------
   useEffect(() => {
     if (!requestId) return;
     const handle = setTimeout(() => {
@@ -523,19 +539,22 @@ function SelectRolesPage() {
     return () => window.removeEventListener('pagehide', saveOnHide);
   }, [requestId, getValues]);
 
-  // --- mount flow -----------------------------------------------------------
+  // --- mount flow (opt-in hydration) ---------------------------------------
   useEffect(() => {
     (async () => {
       const navState = (location && (location as any).state) || {};
       const wantRestore = !!navState.restoreDraft || ALLOW_AUTO_RESTORE;
+      const wantDbHydrate = !!navState.hydrateFromDb; // 👈 only hydrate from DB if set
+
+      // Always start clean
+      reset({ homeBusinessUnit: [], otherBusinessUnits: '' } as any);
 
       // Detect copy flow
       const pendingFormData = localStorage.getItem('pendingFormData');
       const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
       const editingCopiedRoles = localStorage.getItem('editingCopiedRoles') === 'true';
-      const isCopyFlow =
-        editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
+      const isCopyFlow = editingCopiedRoles && pendingFormData && copiedRoleSelections && copiedUserDetails;
 
       if (isCopyFlow) {
         setIsEditingCopiedRoles(true);
@@ -545,18 +564,14 @@ function SelectRolesPage() {
           const copiedUser = JSON.parse(copiedUserDetails as string);
 
           const safeEmployeeName = formData?.employeeName || copiedUser?.employee_name || '';
-          const safeAgencyName = formData?.agencyName || '';
-          const safeAgencyCode = formData?.agencyCode || '';
+          const safeAgencyName  = formData?.agencyName  || '';
+          const safeAgencyCode  = formData?.agencyCode  || '';
 
-          setRequestDetails({
-            employee_name: safeEmployeeName,
-            agency_name: safeAgencyName,
-            agency_code: safeAgencyCode,
-          });
+          setRequestDetails({ employee_name: safeEmployeeName, agency_name: safeAgencyName, agency_code: safeAgencyCode });
 
           if (safeAgencyCode) await fetchBusinessUnitsForAgency(safeAgencyCode);
 
-          // Map role data (explicitly copy)
+          // Copy the role selections into the form
           if (roleData && typeof roleData === 'object') {
             for (const [key, value] of Object.entries(roleData)) {
               if (typeof value === 'boolean' && value === true) {
@@ -576,8 +591,7 @@ function SelectRolesPage() {
               }
               return [];
             };
-            const hbuRaw: any =
-              (roleData as any)?.homeBusinessUnit ?? (roleData as any)?.home_business_unit;
+            const hbuRaw: any = (roleData as any)?.homeBusinessUnit ?? (roleData as any)?.home_business_unit;
             setValue('homeBusinessUnit' as any, toArr(hbuRaw), { shouldDirty: false });
             clearErrors('homeBusinessUnit' as any);
           }
@@ -600,7 +614,7 @@ function SelectRolesPage() {
           localStorage.removeItem('copiedUserDetails');
         }
       } else {
-        // Not copy flow: remove any leftovers
+        // Not copy flow: ensure no stale flags remain
         if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
           localStorage.removeItem('editingCopiedRoles');
           localStorage.removeItem('pendingFormData');
@@ -609,14 +623,14 @@ function SelectRolesPage() {
         }
       }
 
-      // Normal / Edit flow
+      // Normal / edit flow ID
       const stateRequestId = (location as any)?.state?.requestId;
       const effectiveId = stateRequestId || (idParam as string | null);
 
       if (!effectiveId) {
-        // Fresh new request: make absolutely sure form is clean.
+        // Fresh request: ensure absolutely clean state and bounce to main form
         clearAllRoleDrafts();
-        reset({ homeBusinessUnit: [] } as any);
+        reset({ homeBusinessUnit: [], otherBusinessUnits: '' } as any);
         toast.message('Starting a new role selection.');
         navigate('/');
         return;
@@ -624,20 +638,21 @@ function SelectRolesPage() {
 
       setRequestId(effectiveId);
 
-      // Header + agency code (drives BU options)
+      // Header + agency (drives BU options)
       const details = await fetchRequestDetails(effectiveId);
 
       // Only restore drafts if explicitly allowed
       if (wantRestore) {
         restoreFromStableDraftFor(details);
         restoreFromLocalDraft(effectiveId);
-      } else {
-        // Ensure clean form unless DB has a row
-        reset({ homeBusinessUnit: [] } as any);
       }
 
-      // DB hydrate (safe if a row exists)
-      await fetchExistingSelections(effectiveId);
+      // Only hydrate from DB if explicitly allowed
+      if (wantDbHydrate) {
+        await fetchExistingSelections(effectiveId);
+      } else {
+        console.log('⏭️ Skipping DB hydrate (opt-in only).');
+      }
 
       setTimeout(() => {
         const snap = getValues();
@@ -646,6 +661,172 @@ function SelectRolesPage() {
       }, 0);
     })();
   }, [location.state, idParam, navigate, reset, setValue, getValues, clearErrors]);
+
+  // --- submit ---------------------------------------------------------------
+  const onSubmit = async (data: SecurityRoleSelection) => {
+    const homeVal: any = (data as any).homeBusinessUnit;
+    if (!homeVal || (Array.isArray(homeVal) && homeVal.length === 0)) {
+      setError('homeBusinessUnit' as any, {
+        type: 'manual',
+        message: 'Home Business Unit is required. Please select at least one business unit.',
+      });
+      toast.error('Please select at least one Home Business Unit.');
+      homeBusinessUnitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    const anyRoleSelected = Object.entries((data as any) || {}).some(
+      ([, value]) => typeof value === 'boolean' && value === true
+    );
+    if (!anyRoleSelected) {
+      toast.error('Please select at least one role.');
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      // COPY FLOW: create a new request, then insert selections
+      if (isEditingCopiedRoles) {
+        const pendingFormData = localStorage.getItem('pendingFormData');
+        if (!pendingFormData) throw new Error('No pending form data found');
+
+        const d: CopyFlowForm = JSON.parse(pendingFormData);
+
+        // validate required fields
+        const missing: string[] = [];
+        if (!d.employeeName) missing.push('Requested For (employeeName)');
+        if (!d.email) missing.push('Requested For Email');
+        if (!d.agencyName) missing.push('Agency Name');
+        if (!d.agencyCode) missing.push('Agency Code');
+        if (!d.submitterName) missing.push('Submitted By (name)');
+        if (!d.submitterEmail) missing.push('Submitted By (email)');
+        if (!d.supervisorName) missing.push('Supervisor Name');
+        if (!d.supervisorUsername) missing.push('Supervisor Email/Username');
+        if (!d.securityAdminName) missing.push('Security Admin Name');
+        if (!d.securityAdminUsername) missing.push('Security Admin Email/Username');
+
+        if (missing.length) {
+          setSaving(false);
+          toast.error(
+            `Before we can create the new request, we need the following from the main form: ${missing.join(', ')}.`
+          );
+          navigate('/', { state: { fromRolesCopyFlow: true } });
+          return;
+        }
+
+        const startDate = d.startDate || new Date().toISOString().split('T')[0];
+
+        const requestPayload = {
+          start_date: startDate,
+          employee_name: d.employeeName,
+          employee_id: d.employeeId || null,
+          is_non_employee: !!d.isNonEmployee,
+          work_location: d.workLocation || null,
+          work_phone: d.workPhone ? d.workPhone.replace(/\D/g, '') : null,
+          email: d.email,
+          agency_name: d.agencyName,
+          agency_code: d.agencyCode,
+          justification: d.justification || null,
+          submitter_name: d.submitterName,
+          submitter_email: d.submitterEmail,
+          supervisor_name: d.supervisorName,
+          supervisor_email: d.supervisorUsername,
+          security_admin_name: d.securityAdminName,
+          security_admin_email: d.securityAdminUsername,
+          status: 'pending',
+        };
+
+        const { data: newRequest, error: requestError } = await supabase
+          .from('security_role_requests')
+          .insert(requestPayload)
+          .select()
+          .single();
+
+        if (requestError) throw requestError;
+
+        const { error: areasError } = await supabase
+          .from('security_areas')
+          .insert({
+            request_id: newRequest.id,
+            area_type: 'accounting_procurement',
+            director_name: d.accountingDirector || null,
+            director_email: d.accountingDirectorUsername || null,
+          });
+
+        if (areasError) throw areasError;
+
+        const rawPayload = buildRoleSelectionData(newRequest.id, data, {
+          homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
+        });
+
+        const cleaned = coerceBooleansDeep(rawPayload);
+        const normalized = normalizeRoleFlagsTrueOnly(cleaned);
+
+        const { error: selectionsError } = await supabase
+          .from('security_role_selections')
+          .insert(normalized);
+
+        if (selectionsError) throw selectionsError;
+
+        // Clean copy-flow context
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('editingCopiedRoles');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
+
+        toast.success('Role selections saved successfully!');
+        navigate('/success', { state: { requestId: newRequest.id } });
+        return;
+      }
+
+      // NORMAL / EDIT FLOW
+      if (!requestId) {
+        toast.error('No request found. Please start from the main form.');
+        navigate('/');
+        return;
+      }
+
+      const rawPayload = buildRoleSelectionData(requestId, data, {
+        homeBusinessUnitIsArray: HOME_BU_IS_ARRAY,
+      });
+
+      const cleaned = coerceBooleansDeep(rawPayload);
+      const normalized = normalizeRoleFlagsTrueOnly(cleaned);
+
+      const { error } = await supabase
+        .from('security_role_selections')
+        .upsert(normalized, { onConflict: 'request_id' });
+
+      if (error) throw error;
+
+      // clear local id-scoped draft after save
+      try {
+        localStorage.removeItem(draftKey(requestId));
+      } catch {}
+
+      toast.success('Role selections saved successfully!');
+      navigate('/success', { state: { requestId } });
+    } catch (error: any) {
+      console.error('Error saving role selections:', error);
+      const errorMessage = error?.message || 'Unknown error occurred';
+
+      if (
+        error instanceof Error &&
+        error.message.includes('home_business_unit') &&
+        (error.message.includes('not-null') || error.message.includes('null value'))
+      ) {
+        setError('homeBusinessUnit' as any, {
+          type: 'manual',
+          message: 'Home Business Unit is required. Please select at least one business unit.',
+        });
+      } else {
+        toast.error(`Failed to save role selections: ${errorMessage}`);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // --- UI (top) -------------------------------------------------------------
   const ssTemplateRows = ['Business unit template', 'Department template', 'Personal template'];
@@ -695,18 +876,14 @@ function SelectRolesPage() {
                   {requestDetails && (
                     <p className="mt-2 text-sm text-blue-600">
                       Request for: <strong>{requestDetails?.employee_name}</strong>{' '}
-                      {requestDetails?.agency_name ? (
-                        <>
-                          at <strong>{requestDetails?.agency_name}</strong>
-                        </>
-                      ) : null}
+                      {requestDetails?.agency_name ? <>at <strong>{requestDetails?.agency_name}</strong></> : null}
                     </p>
                   )}
                 </div>
               </div>
             </div>
 
-            <form className="p-6 space-y-8">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8">
               {/* Copy User Section */}
               <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                 <div className="flex">
@@ -738,6 +915,7 @@ function SelectRolesPage() {
 
                 <div ref={homeBusinessUnitRef}>
                   <MultiSelect
+                    key={requestDetails?.agency_code || 'no-agency'} // force clean mount per agency
                     options={businessUnitOptions}
                     value={watch('homeBusinessUnit' as any) || []}
                     onChange={handleBusinessUnitChange}
@@ -750,7 +928,9 @@ function SelectRolesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Selected Business Units:</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Selected Business Units:
+                  </label>
                   <p className="mt-1 text-sm text-gray-900">
                     {(() => {
                       const watchedValue: any = watch('homeBusinessUnit' as any);
@@ -767,185 +947,6 @@ function SelectRolesPage() {
                       );
                     })()}
                   </p>
-                </div>
-              </div>
-
-              {/* Accounts Payable — unified single table */}
-              <div className="space-y-6">
-                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    {/* Top blue header */}
-                    <thead style={{ backgroundColor: '#003865' }}>
-                      <tr>
-                        <th
-                          scope="col"
-                          colSpan={2}
-                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
-                        >
-                          ACCOUNTS PAYABLE (AP)
-                          <br />
-                          <span className="normal-case font-normal">
-                            (See also Vendor and Purchasing below)
-                          </span>
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {/* AP basic role checkboxes */}
-                      <tr>
-                        <td className="px-6 py-4" colSpan={2}>
-                          <div className="grid grid-cols-2 gap-6">
-                            <label className="flex items-center">
-                              <input
-                                type="checkbox"
-                                {...register('voucherEntry' as any)}
-                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">Voucher Entry</span>
-                            </label>
-                            <label className="flex items-center">
-                              <input
-                                type="checkbox"
-                                {...register('maintenanceVoucherBuildErrors' as any)}
-                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">
-                                Maintenance of Voucher Build Errors
-                              </span>
-                            </label>
-                            <label className="flex items-center">
-                              <input
-                                type="checkbox"
-                                {...register('matchOverride' as any)}
-                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">Match Override</span>
-                            </label>
-                            <label className="flex items-center">
-                              <input
-                                type="checkbox"
-                                {...register('apInquiryOnly' as any)}
-                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">Accounts Payable Inquiry Only</span>
-                            </label>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {/* In-table blue subheader for Workflow Roles */}
-                      <tr>
-                        <th
-                          colSpan={2}
-                          className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider"
-                          style={{ backgroundColor: '#003865' }}
-                        >
-                          WORKFLOW ROLES
-                        </th>
-                      </tr>
-
-                      {/* Workflow header row */}
-                      <tr>
-                        <td className="px-4 py-2 bg-gray-100 font-medium text-sm w-56 whitespace-nowrap">
-                          Role
-                        </td>
-                        <td className="px-4 py-2 bg-gray-100 font-medium text-sm">
-                          Route Controls: Financial Department ID(s)
-                          <div className="text-xs italic text-gray-600 mt-1">
-                            (8 characters each; separate with commas || new lines)
-                          </div>
-                        </td>
-                      </tr>
-
-                      {/* Voucher Approver 1 */}
-                      <tr>
-                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              {...register('apVoucherApprover1' as any)}
-                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
-                            />
-                            Voucher Approver 1
-                          </label>
-                        </td>
-                        <td className="px-4 py-3">
-                          <textarea
-                            rows={2}
-                            {...register('apVoucherApprover1RouteControls' as any, {
-                              setValueAs: (v: string) =>
-                                (v ?? '')
-                                  .split(/[,\s]+/)
-                                  .map(s => s.trim().toUpperCase())
-                                  .filter(Boolean)
-                                  .join(','),
-                            })}
-                            placeholder="e.g. 12345678, 23456789 (or one per line)"
-                            className="w-full md:w-3/4 rounded-md border border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
-                          />
-                        </td>
-                      </tr>
-
-                      {/* Voucher Approver 2 */}
-                      <tr>
-                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              {...register('apVoucherApprover2' as any)}
-                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
-                            />
-                            Voucher Approver 2
-                          </label>
-                        </td>
-                        <td className="px-4 py-3">
-                          <textarea
-                            rows={2}
-                            {...register('apVoucherApprover2RouteControls' as any, {
-                              setValueAs: (v: string) =>
-                                (v ?? '')
-                                  .split(/[,\s]+/)
-                                  .map(s => s.trim().toUpperCase())
-                                  .filter(Boolean)
-                                  .join(','),
-                            })}
-                            placeholder="e.g. 12345678, 23456789 (or one per line)"
-                            className="w-full md:w-3/4 rounded-md border border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
-                          />
-                        </td>
-                      </tr>
-
-                      {/* Voucher Approver 3 */}
-                      <tr>
-                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              {...register('apVoucherApprover3' as any)}
-                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3"
-                            />
-                            Voucher Approver 3
-                          </label>
-                        </td>
-                        <td className="px-4 py-3">
-                          <textarea
-                            rows={2}
-                            {...register('apVoucherApprover3RouteControls' as any, {
-                              setValueAs: (v: string) =>
-                                (v ?? '')
-                                  .split(/[,\s]+/)
-                                  .map(s => s.trim().toUpperCase())
-                                  .filter(Boolean)
-                                  .join(','),
-                            })}
-                            placeholder="e.g. 12345678, 23456789 (or one per line)"
-                            className="w-full md:w-3/4 rounded-md border border-gray-300 bg-gray-50 text-sm text-gray-700 focus:border-blue-500 focus:ring-blue-500"
-                          />
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
                 </div>
               </div>
 
