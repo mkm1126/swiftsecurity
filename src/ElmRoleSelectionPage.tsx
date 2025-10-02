@@ -11,11 +11,13 @@ import {
   Settings,
   UserCheck,
   Database,
+  Copy,
 } from 'lucide-react';
 import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { toast } from 'sonner';
 import Header from './components/Header';
+import UserSelect from './components/UserSelect';
 
 interface ElmRoleSelection {
   learningAdministrator: boolean;
@@ -49,6 +51,13 @@ type CopyFlowForm = {
   elmKeyAdmin?: string;
   elmKeyAdminUsername?: string;
 };
+
+interface User {
+  employee_name: string;
+  employee_id: string;
+  email: string;
+  request_id?: string;
+}
 
 const elmRoles = [
   { id: 'learningAdministrator', title: 'Learning Administrator', description: 'As a lead administrator for your agency, you will request this role. This has expanded menu options in the Enterprise Learning Folder.', icon: Shield, isHighRisk: true },
@@ -147,11 +156,38 @@ function ElmRoleSelectionPage() {
   const [requestId, setRequestId] = useState<string | null>(null);
   const [requestDetails, setRequestDetails] = useState<{ employee_name?: string; agency_name?: string; agency_code?: string } | null>(null);
   const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
+  const [selectedCopyUser, setSelectedCopyUser] = useState<User | null>(null);
+  const [showCopySection, setShowCopySection] = useState(false);
 
   const { register, handleSubmit, watch, setValue, setError, formState: { errors } } = useForm<ElmRoleSelection>();
   const selectedRoles = watch();
   const hasHighRiskRoles = elmRoles.filter(r => r.isHighRisk).some(r => !!selectedRoles?.[r.id as keyof ElmRoleSelection]);
   const hasSelectedRoles = elmRoles.some(r => !!selectedRoles?.[r.id as keyof ElmRoleSelection]);
+
+  // Handler for when user details are loaded from UserSelect component
+  const handleUserDetailsLoaded = (data: { userDetails: any; roleSelections: any; normalizedRoles: any }) => {
+    console.log('📥 User details loaded for copy:', data);
+    const { roleSelections, normalizedRoles } = data;
+
+    if (roleSelections) {
+      // Map database fields to form fields for ELM roles
+      setValue('learningAdministrator', !!roleSelections.learning_administrator, { shouldDirty: true });
+      setValue('learningCatalogAdministrator', !!roleSelections.learning_catalog_administrator, { shouldDirty: true });
+      setValue('rosterAdministrator', !!roleSelections.roster_administrator, { shouldDirty: true });
+      setValue('enrollmentAdministrator', !!roleSelections.enrollment_administrator, { shouldDirty: true });
+      setValue('maintainApprovals', !!roleSelections.maintain_approvals, { shouldDirty: true });
+      setValue('profileAdministrator', !!roleSelections.profile_administrator, { shouldDirty: true });
+
+      // External learner security administrator requires either flag
+      const externalLearner = !!(roleSelections.m_hr_external_learner_security || roleSelections.m_lmlelm_external_learning_adm);
+      setValue('externalLearnerSecurityAdministrator', externalLearner, { shouldDirty: true });
+
+      setValue('sandboxAccess', !!roleSelections.system_backup_access, { shouldDirty: true });
+      setValue('roleJustification', roleSelections.role_justification || '', { shouldDirty: true });
+
+      toast.success('Roles copied successfully! Review and modify as needed.');
+    }
+  };
 
   // Simple form persistence - save form data when it changes
   useEffect(() => {
@@ -183,15 +219,27 @@ function ElmRoleSelectionPage() {
           const formData: CopyFlowForm = JSON.parse(pendingFormData);
           const roleData = JSON.parse(copiedRoleSelections);
           setRequestDetails({ employee_name: formData.employeeName, agency_name: formData.agencyName, agency_code: formData.agencyCode });
-          setValue('learningAdministrator', !!roleData?.elm_system_administrator);
-          setValue('externalLearnerSecurityAdministrator', !!roleData?.elm_key_administrator);
-          setValue('learningCatalogAdministrator', !!roleData?.elm_course_administrator);
-          setValue('rosterAdministrator', !!roleData?.elm_reporting_administrator);
-          setValue('profileAdministrator', !!roleData?.manage_user_accounts);
-          setValue('enrollmentAdministrator', !!roleData?.assign_user_roles);
-          setValue('maintainApprovals', !!roleData?.view_user_progress);
-          setValue('sandboxAccess', !!roleData?.system_backup_access);
-          setValue('roleJustification', roleData?.role_justification || '');
+
+          // Map copied role data using both camelCase (normalized) and snake_case (raw) field names
+          setValue('learningAdministrator', !!(roleData?.learningAdministrator || roleData?.learning_administrator), { shouldDirty: false });
+          setValue('learningCatalogAdministrator', !!(roleData?.learningCatalogAdministrator || roleData?.learning_catalog_administrator), { shouldDirty: false });
+          setValue('rosterAdministrator', !!(roleData?.rosterAdministrator || roleData?.roster_administrator), { shouldDirty: false });
+          setValue('enrollmentAdministrator', !!(roleData?.enrollmentAdministrator || roleData?.enrollment_administrator), { shouldDirty: false });
+          setValue('maintainApprovals', !!(roleData?.maintainApprovals || roleData?.maintain_approvals), { shouldDirty: false });
+          setValue('profileAdministrator', !!(roleData?.profileAdministrator || roleData?.profile_administrator), { shouldDirty: false });
+
+          // External learner security administrator requires either flag
+          const externalLearner = !!(
+            roleData?.externalLearnerSecurityAdministrator ||
+            roleData?.m_hr_external_learner_security ||
+            roleData?.m_lmlelm_external_learning_adm
+          );
+          setValue('externalLearnerSecurityAdministrator', externalLearner, { shouldDirty: false });
+
+          setValue('sandboxAccess', !!(roleData?.sandboxAccess || roleData?.system_backup_access), { shouldDirty: false });
+          setValue('roleJustification', roleData?.roleJustification || roleData?.role_justification || '', { shouldDirty: false });
+
+          console.log('✅ Copy flow data loaded successfully for ELM roles');
         } catch (e) {
           console.error('Error loading copy-flow data:', e);
           toast.error('Error loading copied user data');
@@ -479,6 +527,43 @@ function ElmRoleSelectionPage() {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8">
+              {/* Copy Existing User Access Section */}
+              {!isEditingCopiedRoles && requestId && (
+                <div className="border-b border-gray-200 pb-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowCopySection(!showCopySection)}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <div className="flex items-center">
+                      <Copy className="h-5 w-5 text-blue-600 mr-2" />
+                      <h3 className="text-lg font-medium text-gray-900">
+                        Copy Existing User Access (Optional)
+                      </h3>
+                    </div>
+                    <span className="text-sm text-gray-500">
+                      {showCopySection ? 'Hide' : 'Show'}
+                    </span>
+                  </button>
+
+                  {showCopySection && (
+                    <div className="mt-4">
+                      <p className="text-sm text-gray-600 mb-4">
+                        You can copy role selections from an existing user who has similar job responsibilities.
+                        This will pre-populate the form with their current access permissions.
+                      </p>
+                      <UserSelect
+                        selectedUser={selectedCopyUser}
+                        onUserChange={setSelectedCopyUser}
+                        currentUser={requestDetails?.employee_name}
+                        currentRequestId={requestId}
+                        formData={undefined}
+                        onUserDetailsLoaded={handleUserDetailsLoaded}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
