@@ -710,6 +710,9 @@ function SelectRolesPage() {
         reset(snap);
         isHydratingRef.current = false;
       }, 0);
+
+      // Scroll to top when page loads
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     })();
   }, [location.state, idParam, navigate, reset, setValue, getValues, clearErrors]);
 
