@@ -496,18 +496,12 @@ function UserSelect({
                 roleSelections={roleSelections}
                 // no mid-card buttons; use the bottom buttons instead
               />
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4">
                 <button
                   onClick={handleCopyRoles}
                   className="inline-flex items-center px-3 py-1 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Copy These Roles
-                </button>
-                <button
-                  onClick={handleEditRoles}
-                  className="inline-flex items-center px-3 py-1 border border-green-300 text-sm font-medium rounded-md text-green-700 bg-white hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  Edit Before Copying
                 </button>
               </div>
             </div>
