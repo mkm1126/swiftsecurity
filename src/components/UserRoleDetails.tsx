@@ -47,7 +47,17 @@ function pickRoleSource(roleSelections: RoleSelections): Record<string, any> {
 const UserRoleDetails: React.FC<UserRoleDetailsProps> = ({ userDetails, roleSelections }) => {
   const source = pickRoleSource(roleSelections);
   const activeRoles = getActiveBooleanRoles(source);
-  const homeBU = (source as any).homeBusinessUnit || (source as any).home_business_unit || '';
+  const rawHomeBU = (source as any).homeBusinessUnit || (source as any).home_business_unit || '';
+
+  // Format business units: if it's an array, join with commas; if string, split by known prefixes and join
+  let homeBU = '';
+  if (Array.isArray(rawHomeBU)) {
+    homeBU = rawHomeBU.join(', ');
+  } else if (typeof rawHomeBU === 'string' && rawHomeBU) {
+    // Split concatenated codes like "G0201G0202G0203" into "G0201, G0202, G0203"
+    const matches = rawHomeBU.match(/[A-Z]\d{4}/g);
+    homeBU = matches ? matches.join(', ') : rawHomeBU;
+  }
 
   return (
     <div className="space-y-4">
