@@ -412,6 +412,57 @@ function SelectRolesPage() {
   };
   const handleUserChange = (user: User | null) => setSelectedUser(user);
 
+  // Handler for when user details are loaded from UserSelect component
+  const handleUserDetailsLoaded = (data: { userDetails: any; roleSelections: any; normalizedRoles: any }) => {
+    const { normalizedRoles } = data;
+
+    console.log('📥 Auto-populating form with copied user data:', normalizedRoles);
+    toast.success('Form populated with selected user\'s access permissions');
+
+    // Helper to convert various formats to string array
+    const toArray = (val: any): string[] => {
+      if (Array.isArray(val)) return val.map(String).filter(Boolean);
+      if (typeof val === 'string') {
+        return val.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+      }
+      return [];
+    };
+
+    // Populate all form fields from normalized roles
+    if (normalizedRoles && typeof normalizedRoles === 'object') {
+      for (const [key, value] of Object.entries(normalizedRoles)) {
+        // Skip metadata fields
+        if (['id', 'created_at', 'updated_at', 'request_id'].includes(key)) continue;
+
+        // Handle boolean checkboxes
+        if (typeof value === 'boolean' && value === true) {
+          setValue(key as keyof SecurityRoleSelection, true as any, { shouldDirty: true });
+        }
+        // Handle string fields
+        else if (typeof value === 'string' && value.trim()) {
+          setValue(key as keyof SecurityRoleSelection, value as any, { shouldDirty: true });
+        }
+      }
+
+      // Special handling for homeBusinessUnit - ensure it's an array
+      const homeBusinessUnit = normalizedRoles.homeBusinessUnit || normalizedRoles.home_business_unit;
+      if (homeBusinessUnit) {
+        const homeBusinessUnitArray = toArray(homeBusinessUnit);
+        setValue('homeBusinessUnit' as any, homeBusinessUnitArray, { shouldDirty: true });
+        clearErrors('homeBusinessUnit' as any);
+        console.log('✅ Home Business Unit set to:', homeBusinessUnitArray);
+      }
+
+      // Handle otherBusinessUnits as a string
+      if (normalizedRoles.otherBusinessUnits) {
+        const otherBU = typeof normalizedRoles.otherBusinessUnits === 'string'
+          ? normalizedRoles.otherBusinessUnits
+          : String(normalizedRoles.otherBusinessUnits || '');
+        setValue('otherBusinessUnits' as any, otherBU, { shouldDirty: true });
+      }
+    }
+  };
+
   // --- data fetching --------------------------------------------------------
   const fetchRequestDetails = async (
     id: string
@@ -899,7 +950,12 @@ function SelectRolesPage() {
                       </p>
                     </div>
                     <div className="mt-4">
-                      <UserSelect selectedUser={selectedUser} onUserChange={handleUserChange} formData={watch()} />
+                      <UserSelect
+                        selectedUser={selectedUser}
+                        onUserChange={handleUserChange}
+                        formData={watch()}
+                        onUserDetailsLoaded={handleUserDetailsLoaded}
+                      />
                     </div>
                   </div>
                 </div>

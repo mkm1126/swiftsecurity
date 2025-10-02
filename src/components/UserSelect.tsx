@@ -24,6 +24,7 @@ interface UserSelectProps {
   currentUser?: string | null;
   currentRequestId?: string | null;
   formData?: any; // Current form data from parent component
+  onUserDetailsLoaded?: (data: { userDetails: any; roleSelections: any; normalizedRoles: any }) => void;
 }
 
 /** Utility: camelCase a snake_case key */
@@ -210,14 +211,15 @@ function buildCompleteFormData(formDataProp: any, draft: any, userDetails: any) 
   return merged;
 }
 
-function UserSelect({ 
-  selectedUser, 
-  onUserChange, 
-  error, 
-  required = false, 
-  currentUser, 
+function UserSelect({
+  selectedUser,
+  onUserChange,
+  error,
+  required = false,
+  currentUser,
   currentRequestId,
-  formData 
+  formData,
+  onUserDetailsLoaded
 }: UserSelectProps) {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
@@ -414,6 +416,17 @@ function UserSelect({
       if (roleError) throw roleError;
       log('Role data fetched:', roleData);
       setRoleSelections(roleData);
+
+      // Notify parent component with loaded data
+      if (onUserDetailsLoaded && requestData) {
+        const normalizedRoles = normalizeRoles(roleData);
+        log('📢 Notifying parent with user details and normalized roles:', normalizedRoles);
+        onUserDetailsLoaded({
+          userDetails: requestData,
+          roleSelections: roleData,
+          normalizedRoles
+        });
+      }
 
     } catch (error) {
       console.error('Error fetching user details:', error);
