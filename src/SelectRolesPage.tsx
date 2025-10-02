@@ -46,11 +46,13 @@ type CopyFlowForm = {
 function SelectRolesPage() {
   // --- config ---------------------------------------------------------------
   const HOME_BU_IS_ARRAY = true;
-  // Do not auto-restore drafts unless explicitly requested via router state.
+
+  // Absolutely no auto-restore unless explicitly requested via router state.
   const ALLOW_AUTO_RESTORE = false;
 
   // --- helpers --------------------------------------------------------------
   const isHydratingRef = useRef(true);
+  const didColdStartRef = useRef(false); // ensures our cold-start cleanup runs once
 
   const snakeToCamel = (s: string) => s.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
   const camelToSnake = (s: string) => s.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
@@ -64,20 +66,18 @@ function SelectRolesPage() {
     return `selectRoles_${d.employee_name}_${d.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
   };
 
-  // Hard reset: remove any selectRoles_* keys
+  // Purge: remove any selectRoles_* keys
   const clearAllRoleDrafts = () => {
-    const keys: string[] = [];
+    const toRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i)!;
-      if (k.startsWith('selectRoles_')) keys.push(k);
+      if (k.startsWith('selectRoles_')) toRemove.push(k);
     }
-    keys.forEach((k) => localStorage.removeItem(k));
+    toRemove.forEach((k) => localStorage.removeItem(k));
   };
 
-  // Optional draft restore (stable)
-  const restoreFromStableDraftFor = (
-    details: { employee_name?: string; agency_name?: string } | null
-  ): boolean => {
+  // Optional draft restores (only when opted-in)
+  const restoreFromStableDraftFor = (details: { employee_name?: string; agency_name?: string } | null): boolean => {
     const sk = stableStorageKey(details);
     if (!sk) return false;
     const json = localStorage.getItem(sk);
@@ -96,7 +96,6 @@ function SelectRolesPage() {
     }
   };
 
-  // Optional draft restore (id-scoped)
   const restoreFromLocalDraft = (id: string) => {
     try {
       const raw = localStorage.getItem(draftKey(id));
@@ -120,15 +119,12 @@ function SelectRolesPage() {
     } catch {}
   };
 
-  // Boolean coercion
   const coerceBooleansDeep = (value: any): any => {
     if (value === 'on') return true;
     if (value === 'off') return false;
     if (Array.isArray(value)) {
       const mapped = value.map(coerceBooleansDeep);
-      if (mapped.length > 0 && mapped.every((v) => typeof v === 'boolean')) {
-        return mapped.some(Boolean);
-      }
+      if (mapped.length > 0 && mapped.every((v) => typeof v === 'boolean')) return mapped.some(Boolean);
       return mapped;
     }
     if (value && typeof value === 'object') {
@@ -151,16 +147,16 @@ function SelectRolesPage() {
     return out as T;
   }
 
-  const splitCodes = (val: string | null | undefined, codeLen: number) => {
-    if (!val) return [] as string[];
-    return String(val)
-      .split(/[\s,;\n\r]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((s) => s.toUpperCase())
-      .map((s) => s.replace(/[^A-Z0-9]/g, ''))
-      .filter((s) => s.length === codeLen);
-  };
+  const splitCodes = (val: string | null | undefined, codeLen: number) =>
+    !val
+      ? ([] as string[])
+      : String(val)
+          .split(/[\s,;\n\r]+/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((s) => s.toUpperCase())
+          .map((s) => s.replace(/[^A-Z0-9]/g, ''))
+          .filter((s) => s.length === codeLen);
 
   const buildRoleSelectionData = (
     request_id: string,
@@ -258,7 +254,6 @@ function SelectRolesPage() {
       other_business_units: toOrNull(otherBUs),
       ...EXTRA_ACCOUNTING_PROCUREMENT_FLAGS,
 
-      // ----- booleans / strings -----
       voucher_entry: (data as any).voucherEntry || false,
       maintenance_voucher_build_errors: (data as any).maintenanceVoucherBuildErrors || false,
       match_override: (data as any).matchOverride || false,
@@ -323,7 +318,6 @@ function SelectRolesPage() {
 
       role_justification: (data as any).roleJustification || null,
 
-      // ----- arrays (TEXT[]) -----
       ap_voucher_approver_1: (data as any).apVoucherApprover1 || false,
       ap_voucher_approver_2: (data as any).apVoucherApprover2 || false,
       ap_voucher_approver_3: (data as any).apVoucherApprover3 || false,
@@ -350,13 +344,11 @@ function SelectRolesPage() {
     };
   };
 
-  // daily receipts helper
   const setDailyReceipts = (answer: 'yes' | 'no') => {
     setValue('needsDailyReceiptsYes' as any, answer === 'yes', { shouldDirty: true });
     setValue('needsDailyReceiptsNo' as any, answer !== 'yes', { shouldDirty: true });
   };
 
-  // small UI helpers
   const rcInputClasses =
     'w-56 h-10 px-3 rounded-md border border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm placeholder:text-gray-400';
   const inputStd =
@@ -395,7 +387,7 @@ function SelectRolesPage() {
     shouldUnregister: false,
   });
 
-  // keep this early so it's defined before any effects read it
+  // Define early so effects can read it safely
   const selectedRoles = watch();
 
   // BU options — prefer DB list, fallback to bundled list (filtered by agency)
@@ -468,7 +460,7 @@ function SelectRolesPage() {
         .select('*')
         .eq('request_id', id)
         .maybeSingle();
-      if (error) throw error;
+    if (error) throw error;
 
       if (data) {
         setHasExistingDbSelections(true);
@@ -515,7 +507,7 @@ function SelectRolesPage() {
     }
   };
 
-  // --- local draft persistence (still allowed; restore is opt-in) ----------
+  // --- local draft persistence (restore is opt-in; save is fine) -----------
   useEffect(() => {
     if (!requestId) return;
     const handle = setTimeout(() => {
@@ -539,17 +531,29 @@ function SelectRolesPage() {
     return () => window.removeEventListener('pagehide', saveOnHide);
   }, [requestId, getValues]);
 
-  // --- mount flow (opt-in hydration) ---------------------------------------
+  // --- mount flow (COLD START -> always clean; hydrations are opt-in) ------
   useEffect(() => {
     (async () => {
       const navState = (location && (location as any).state) || {};
       const wantRestore = !!navState.restoreDraft || ALLOW_AUTO_RESTORE;
-      const wantDbHydrate = !!navState.hydrateFromDb; // 👈 only hydrate from DB if set
+      const wantDbHydrate = !!navState.hydrateFromDb;
 
-      // Always start clean
-      reset({ homeBusinessUnit: [], otherBusinessUnits: '' } as any);
+      // COLD START: force a clean slate once per mount
+      if (!didColdStartRef.current) {
+        didColdStartRef.current = true;
 
-      // Detect copy flow
+        // purge any leftovers from prior sessions
+        clearAllRoleDrafts();
+        localStorage.removeItem('editingCopiedRoles');
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
+
+        // hard reset form to empty BEFORE any async work
+        reset({ homeBusinessUnit: [], otherBusinessUnits: '' } as any);
+      }
+
+      // Detect copy flow (only if flags present now)
       const pendingFormData = localStorage.getItem('pendingFormData');
       const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
@@ -571,7 +575,7 @@ function SelectRolesPage() {
 
           if (safeAgencyCode) await fetchBusinessUnitsForAgency(safeAgencyCode);
 
-          // Copy the role selections into the form
+          // Apply copied role selections explicitly
           if (roleData && typeof roleData === 'object') {
             for (const [key, value] of Object.entries(roleData)) {
               if (typeof value === 'boolean' && value === true) {
@@ -614,23 +618,19 @@ function SelectRolesPage() {
           localStorage.removeItem('copiedUserDetails');
         }
       } else {
-        // Not copy flow: ensure no stale flags remain
-        if (editingCopiedRoles || pendingFormData || copiedRoleSelections || copiedUserDetails) {
-          localStorage.removeItem('editingCopiedRoles');
-          localStorage.removeItem('pendingFormData');
-          localStorage.removeItem('copiedRoleSelections');
-          localStorage.removeItem('copiedUserDetails');
-        }
+        // ensure any accidental leftovers are gone
+        localStorage.removeItem('editingCopiedRoles');
+        localStorage.removeItem('pendingFormData');
+        localStorage.removeItem('copiedRoleSelections');
+        localStorage.removeItem('copiedUserDetails');
       }
 
-      // Normal / edit flow ID
+      // Determine request to show header + filter BU list
       const stateRequestId = (location as any)?.state?.requestId;
       const effectiveId = stateRequestId || (idParam as string | null);
 
       if (!effectiveId) {
-        // Fresh request: ensure absolutely clean state and bounce to main form
-        clearAllRoleDrafts();
-        reset({ homeBusinessUnit: [], otherBusinessUnits: '' } as any);
+        // New request path: already wiped everything; bounce to main form
         toast.message('Starting a new role selection.');
         navigate('/');
         return;
@@ -638,7 +638,7 @@ function SelectRolesPage() {
 
       setRequestId(effectiveId);
 
-      // Header + agency (drives BU options)
+      // Header + agency (drives BU options). This does not set any ROLE values.
       const details = await fetchRequestDetails(effectiveId);
 
       // Only restore drafts if explicitly allowed
@@ -686,14 +686,13 @@ function SelectRolesPage() {
     setSaving(true);
 
     try {
-      // COPY FLOW: create a new request, then insert selections
+      // COPY FLOW: create a new request first
       if (isEditingCopiedRoles) {
         const pendingFormData = localStorage.getItem('pendingFormData');
         if (!pendingFormData) throw new Error('No pending form data found');
 
         const d: CopyFlowForm = JSON.parse(pendingFormData);
 
-        // validate required fields
         const missing: string[] = [];
         if (!d.employeeName) missing.push('Requested For (employeeName)');
         if (!d.email) missing.push('Requested For Email');
@@ -769,7 +768,7 @@ function SelectRolesPage() {
 
         if (selectionsError) throw selectionsError;
 
-        // Clean copy-flow context
+        // Clean copy-flow artifacts
         localStorage.removeItem('pendingFormData');
         localStorage.removeItem('editingCopiedRoles');
         localStorage.removeItem('copiedRoleSelections');
@@ -800,7 +799,6 @@ function SelectRolesPage() {
 
       if (error) throw error;
 
-      // clear local id-scoped draft after save
       try {
         localStorage.removeItem(draftKey(requestId));
       } catch {}
@@ -915,7 +913,7 @@ function SelectRolesPage() {
 
                 <div ref={homeBusinessUnitRef}>
                   <MultiSelect
-                    key={requestDetails?.agency_code || 'no-agency'} // force clean mount per agency
+                    key={`${requestId || 'no-req'}-${requestDetails?.agency_code || 'no-agency'}`} // force clean mount per request/agency
                     options={businessUnitOptions}
                     value={watch('homeBusinessUnit' as any) || []}
                     onChange={handleBusinessUnitChange}
@@ -928,9 +926,7 @@ function SelectRolesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Selected Business Units:
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700">Selected Business Units:</label>
                   <p className="mt-1 text-sm text-gray-900">
                     {(() => {
                       const watchedValue: any = watch('homeBusinessUnit' as any);
