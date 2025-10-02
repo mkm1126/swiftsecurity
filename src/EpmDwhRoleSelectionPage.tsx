@@ -1,11 +1,19 @@
 // src/EpmDwhRoleSelectionPage.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, Save, Database, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, Database, AlertTriangle, Copy } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { toast } from 'sonner';
 import Header from './components/Header';
+import UserSelect from './components/UserSelect';
+
+interface User {
+  employee_name: string;
+  employee_id: string;
+  email: string;
+  request_id?: string;
+}
 
 type Form = {
   // (we don't require user entry for these; we compute from request)
@@ -69,6 +77,9 @@ export default function EpmDwhRoleSelectionPage() {
     agency_name?: string;
     agency_code?: string;
   } | null>(null);
+  const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
+  const [showCopySection, setShowCopySection] = useState(false);
+  const [selectedCopyUser, setSelectedCopyUser] = useState<User | null>(null);
 
   const {
     register,
@@ -173,10 +184,55 @@ export default function EpmDwhRoleSelectionPage() {
     return () => clearTimeout(timeoutId);
   }, [watch(), requestDetails]);
 
+  // Handler for when user details are loaded from UserSelect component
+  const handleUserDetailsLoaded = (data: { userDetails: any; roleSelections: any; normalizedRoles: any }) => {
+    console.log('📥 User details loaded for copy:', data);
+    const { roleSelections } = data;
+
+    if (roleSelections) {
+      // Map database fields to form fields for EPM DWH roles
+      const mappings: Record<string, keyof Form> = {
+        data_extracts: 'dataExtracts',
+        gw_basic_report_dev: 'gwBasicReportDev',
+        gw_advanced_report_dev: 'gwAdvancedReportDev',
+        gw_dashboard_developer: 'gwDashboardDeveloper',
+        gw_agency_administrator: 'gwAgencyAdministrator',
+        gw_agency_code: 'gwAgencyCode',
+        fms_lookup: 'fmsLookup',
+        year_end_financial_reporting: 'yearEndFinancialReporting',
+        elm_warehouse_report: 'elmWarehouseReport',
+        hcm_lookup: 'hcmLookup',
+        payroll_funding_salary_fte: 'payrollFundingSalaryFte',
+        payroll_paycheck_info: 'payrollPaycheckInfo',
+        hr_private_by_department: 'hrPrivateByDepartment',
+        payroll_self_service_data: 'payrollSelfServiceData',
+        hr_statewide_data: 'hrStatewideData',
+        recruiting_solutions_data: 'recruitingSolutionsData',
+        labor_distribution: 'laborDistribution',
+        ssn_view: 'ssnView',
+        payroll_deductions: 'payrollDeductions',
+        hr_data_excluded_employees: 'hrDataExcludedEmployees',
+        raps_bi_author: 'rapsBiAuthor',
+        raps_hcm_lookup: 'rapsHcmLookup',
+        raps_link: 'rapsLink',
+        role_justification: 'roleJustification'
+      };
+
+      Object.entries(mappings).forEach(([dbField, formField]) => {
+        if (roleSelections[dbField] !== undefined) {
+          setValue(formField, roleSelections[dbField], { shouldDirty: true });
+        }
+      });
+
+      toast.success('Roles copied successfully! Review and modify as needed.');
+    }
+  };
+
   useEffect(() => {
     const isCopyFlow = localStorage.getItem('editingCopiedRoles') === 'true';
 
     if (isCopyFlow) {
+      setIsEditingCopiedRoles(true);
       const pendingFormData = localStorage.getItem('pendingFormData');
       const copiedRoleSelections = localStorage.getItem('copiedRoleSelections');
       const copiedUserDetails = localStorage.getItem('copiedUserDetails');
@@ -478,6 +534,43 @@ export default function EpmDwhRoleSelectionPage() {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8">
+              {/* Copy Existing User Access Section */}
+              {!isEditingCopiedRoles && requestId && (
+                <div className="border-b border-gray-200 pb-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowCopySection(!showCopySection)}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <div className="flex items-center">
+                      <Copy className="h-5 w-5 text-blue-600 mr-2" />
+                      <h3 className="text-lg font-medium text-gray-900">
+                        Copy Existing User Access (Optional)
+                      </h3>
+                    </div>
+                    <span className="text-sm text-gray-500">
+                      {showCopySection ? 'Hide' : 'Show'}
+                    </span>
+                  </button>
+
+                  {showCopySection && (
+                    <div className="mt-4">
+                      <p className="text-sm text-gray-600 mb-4">
+                        You can copy role selections from an existing user who has similar job responsibilities.
+                        This will pre-populate the form with their current access permissions.
+                      </p>
+                      <UserSelect
+                        selectedUser={selectedCopyUser}
+                        onUserChange={setSelectedCopyUser}
+                        currentUser={requestDetails?.employee_name}
+                        currentRequestId={requestId}
+                        formData={undefined}
+                        onUserDetailsLoaded={handleUserDetailsLoaded}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
               {/* TABLE 1: DATA EXTRACTS */}
               <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
                 <table className="min-w-full divide-y divide-gray-300">
