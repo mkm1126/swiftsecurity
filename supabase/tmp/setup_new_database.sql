@@ -94,6 +94,15 @@ CREATE TABLE IF NOT EXISTS public.security_role_selections (
   ap_voucher_approver_2_route_controls text,
   ap_voucher_approver_3_route_controls text,
 
+  -- Purchase Order (Procurement)
+  po_approver boolean DEFAULT false,
+  po_approver_2 boolean DEFAULT false,
+  po_approver_3 boolean DEFAULT false,
+  po_approver_limit_1 text,
+  po_approver_limit_2 text,
+  po_approver_limit_3 text,
+  po_approver_route_controls text,
+
   -- Accounts Receivable and Cash Management
   cash_maintenance boolean DEFAULT false,
   receivable_specialist boolean DEFAULT false,
