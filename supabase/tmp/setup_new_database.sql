@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS public.security_role_requests (
 
 CREATE TABLE IF NOT EXISTS public.security_role_selections (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  request_id uuid NOT NULL REFERENCES public.security_role_requests(id) ON DELETE CASCADE,
+  request_id uuid NOT NULL UNIQUE REFERENCES public.security_role_requests(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
 
@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS public.security_areas (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   request_id uuid NOT NULL REFERENCES public.security_role_requests(id) ON DELETE CASCADE,
   area_type text NOT NULL,
+  director_name text,
   director_email text,
   created_at timestamptz DEFAULT now()
 );
