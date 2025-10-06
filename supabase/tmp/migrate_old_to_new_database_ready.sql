@@ -44,7 +44,7 @@ FROM dblink(
 ) AS t(
   id uuid, created_at timestamptz, updated_at timestamptz, start_date date,
   employee_name text, employee_id text, is_non_employee boolean, work_location text,
-  work_phone text, email text, agency_name text, agency_code char,
+  work_phone text, email text, agency_name text, agency_code text,
   justification text, submitter_name text, submitter_email text,
   supervisor_name text, supervisor_email text, security_admin_name text,
   security_admin_email text, status text, hr_mainframe_logon_id text
