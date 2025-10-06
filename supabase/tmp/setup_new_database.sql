@@ -196,6 +196,9 @@ CREATE TABLE IF NOT EXISTS public.security_role_selections (
   -- Approval
   supervisor_approval boolean DEFAULT false,
 
+  -- Justification
+  role_justification text,
+
   -- JSON storage for flexible data
   role_selection_json jsonb
 );
