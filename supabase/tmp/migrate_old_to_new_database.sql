@@ -1,188 +1,520 @@
 -- ============================================================================
--- DATA MIGRATION: Old Database → New Database
+-- MIGRATION: Copy data from OLD database to NEW database
 -- ============================================================================
--- This script exports data from the OLD database in a format that can be
--- imported into the NEW database.
---
--- INSTRUCTIONS:
--- 1. Run PART 1 in the OLD database (lyzcqbbfmgtxieytskrf)
--- 2. Copy the output
--- 3. Run PART 2 (the output from step 2) in the NEW database (0ec90b57d6e95fcbda19832f)
+-- Instructions:
+-- 1. First, enable dblink extension in NEW database if not already enabled:
+--    CREATE EXTENSION IF NOT EXISTS dblink;
+-- 2. Replace YOUR_OLD_DB_PASSWORD with actual password
+-- 3. Run this in NEW database: https://supabase.com/dashboard/project/aciuwjjucrfzhdhqmixk/sql
 -- ============================================================================
 
--- ============================================================================
--- PART 1: RUN THIS IN OLD DATABASE
--- Copy this query and run it in:
--- https://supabase.com/dashboard/project/lyzcqbbfmgtxieytskrf/sql
--- ============================================================================
+-- NOTE: This script is in supabase/tmp (not migrations) because it's a one-time
+-- data migration, not a schema change
 
--- This will generate INSERT statements for your data
-SELECT
-  'INSERT INTO public.security_role_requests (id, created_at, updated_at, start_date, employee_name, employee_id, is_non_employee, work_location, work_phone, email, agency_name, agency_code, justification, submitter_name, submitter_email, supervisor_name, supervisor_username, security_admin_name, security_admin_username, security_area, accounting_director, accounting_director_username, hr_mainframe_logon_id, hr_view_statewide, elm_key_admin, elm_key_admin_username, elm_director, elm_director_email, hr_director, hr_director_email, copy_from_user, copy_user_name, copy_user_employee_id, copy_user_sema4_id, non_employee_type, access_end_date, security_measures, status) VALUES' AS sql_statement
-UNION ALL
-SELECT
-  format(
-    '(%L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L)' ||
-    CASE WHEN row_number() OVER () = count(*) OVER () THEN ';' ELSE ',' END,
-    id::text,
-    created_at,
-    updated_at,
-    start_date,
-    employee_name,
-    employee_id,
-    is_non_employee,
-    work_location,
-    work_phone,
-    email,
-    agency_name,
-    agency_code,
-    justification,
-    submitter_name,
-    submitter_email,
-    supervisor_name,
-    supervisor_username,
-    security_admin_name,
-    security_admin_username,
-    security_area,
-    accounting_director,
-    accounting_director_username,
-    hr_mainframe_logon_id,
-    hr_view_statewide,
-    elm_key_admin,
-    elm_key_admin_username,
-    elm_director,
-    elm_director_email,
-    hr_director,
-    hr_director_email,
-    copy_from_user,
-    copy_user_name,
-    copy_user_employee_id,
-    copy_user_sema4_id,
-    non_employee_type,
-    access_end_date,
-    security_measures,
-    status
-  )
-FROM public.access_requests
-ORDER BY created_at;
+-- Migrate security_role_selections to role_selections
+-- Map old boolean columns to new role_code structure
+INSERT INTO role_selections (request_id, role_code, details, created_at)
+SELECT request_id, role_code, details, created_at FROM (
+  -- Accounting & Procurement roles
+  SELECT request_id, 'VOUCHER_ENTRY' as role_code, NULL::jsonb as details, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE voucher_entry = true')
+  AS t(request_id uuid, created_at timestamptz)
 
--- Now do the same for security_role_selections
-SELECT '' AS separator;
-SELECT 'INSERT INTO public.security_role_selections (id, request_id, created_at, updated_at, home_business_unit, other_business_units, voucher_entry, voucher_approver_1, voucher_approver_2, voucher_approver_3, maintenance_voucher_build_errors, match_override, ap_inquiry_only, ap_workflow_approver, ap_workflow_route_controls, ap_voucher_approver_1, ap_voucher_approver_2, ap_voucher_approver_3, ap_voucher_approver_1_route_controls, ap_voucher_approver_2_route_controls, ap_voucher_approver_3_route_controls, cash_maintenance, receivable_specialist, receivable_supervisor, writeoff_approval_business_units, billing_create, billing_specialist, billing_supervisor, credit_invoice_approval_business_units, customer_maintenance_specialist, ar_billing_setup, ar_billing_inquiry_only, cash_management_inquiry_only, budget_journal_entry_online, budget_journal_load, journal_approver, journal_approver_appr, journal_approver_rev, appropriation_sources, expense_budget_source, revenue_budget_source, budget_transfer_entry_online, transfer_approver, transfer_appropriation_sources, budget_inquiry_only, journal_entry_online, journal_load, agency_chartfield_maintenance, gl_agency_approver, gl_agency_approver_sources, general_ledger_inquiry_only, nvision_reporting_agency_user, needs_daily_receipts_report, award_data_entry, grant_fiscal_manager, program_manager, gm_agency_setup, grants_inquiry_only, federal_project_initiator, oim_initiator, project_initiator, project_manager, capital_programs_office, project_cost_accountant, project_fixed_asset, category_subcategory_manager, project_control_dates, project_accounting_systems, mndot_projects_inquiry, projects_inquiry_only, mndot_project_approver, route_control, cost_allocation_inquiry_only, financial_accountant_assets, asset_management_inquiry_only, physical_inventory_approval_1, physical_inventory_business_units, physical_inventory_approval_2, physical_inventory_department_ids, inventory_express_issue, inventory_adjustment_approver, inventory_replenishment_buyer, inventory_control_worker, inventory_express_putaway, inventory_fulfillment_specialist, inventory_po_receiver, inventory_returns_receiver, inventory_cost_adjustment, inventory_materials_manager, inventory_delivery, inventory_inquiry_only, inventory_configuration_agency, inventory_pick_plan_report_distribution, ship_to_location, inventory_business_units, supervisor_approval, role_selection_json) VALUES' AS sql_statement
-UNION ALL
-SELECT
-  format(
-    '(%L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L)' ||
-    CASE WHEN row_number() OVER () = count(*) OVER () THEN ';' ELSE ',' END,
-    id::text,
-    request_id::text,
-    created_at,
-    updated_at,
-    home_business_unit,
-    other_business_units,
-    voucher_entry,
-    voucher_approver_1,
-    voucher_approver_2,
-    voucher_approver_3,
-    maintenance_voucher_build_errors,
-    match_override,
-    ap_inquiry_only,
-    ap_workflow_approver,
-    ap_workflow_route_controls,
-    ap_voucher_approver_1,
-    ap_voucher_approver_2,
-    ap_voucher_approver_3,
-    ap_voucher_approver_1_route_controls,
-    ap_voucher_approver_2_route_controls,
-    ap_voucher_approver_3_route_controls,
-    cash_maintenance,
-    receivable_specialist,
-    receivable_supervisor,
-    writeoff_approval_business_units,
-    billing_create,
-    billing_specialist,
-    billing_supervisor,
-    credit_invoice_approval_business_units,
-    customer_maintenance_specialist,
-    ar_billing_setup,
-    ar_billing_inquiry_only,
-    cash_management_inquiry_only,
-    budget_journal_entry_online,
-    budget_journal_load,
-    journal_approver,
-    journal_approver_appr,
-    journal_approver_rev,
-    appropriation_sources,
-    expense_budget_source,
-    revenue_budget_source,
-    budget_transfer_entry_online,
-    transfer_approver,
-    transfer_appropriation_sources,
-    budget_inquiry_only,
-    journal_entry_online,
-    journal_load,
-    agency_chartfield_maintenance,
-    gl_agency_approver,
-    gl_agency_approver_sources,
-    general_ledger_inquiry_only,
-    nvision_reporting_agency_user,
-    needs_daily_receipts_report,
-    award_data_entry,
-    grant_fiscal_manager,
-    program_manager,
-    gm_agency_setup,
-    grants_inquiry_only,
-    federal_project_initiator,
-    oim_initiator,
-    project_initiator,
-    project_manager,
-    capital_programs_office,
-    project_cost_accountant,
-    project_fixed_asset,
-    category_subcategory_manager,
-    project_control_dates,
-    project_accounting_systems,
-    mndot_projects_inquiry,
-    projects_inquiry_only,
-    mndot_project_approver,
-    route_control,
-    cost_allocation_inquiry_only,
-    financial_accountant_assets,
-    asset_management_inquiry_only,
-    physical_inventory_approval_1,
-    physical_inventory_business_units,
-    physical_inventory_approval_2,
-    physical_inventory_department_ids,
-    inventory_express_issue,
-    inventory_adjustment_approver,
-    inventory_replenishment_buyer,
-    inventory_control_worker,
-    inventory_express_putaway,
-    inventory_fulfillment_specialist,
-    inventory_po_receiver,
-    inventory_returns_receiver,
-    inventory_cost_adjustment,
-    inventory_materials_manager,
-    inventory_delivery,
-    inventory_inquiry_only,
-    inventory_configuration_agency,
-    inventory_pick_plan_report_distribution,
-    ship_to_location,
-    inventory_business_units,
-    supervisor_approval,
-    role_selection_json::text
-  )
-FROM public.security_role_selections
-ORDER BY created_at;
+  UNION ALL
+  SELECT request_id, 'VOUCHER_BUILD_ERRORS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE maintenance_voucher_build_errors = true')
+  AS t(request_id uuid, created_at timestamptz)
 
--- ============================================================================
--- NOTES:
--- ============================================================================
--- After you run this query in the old database:
--- 1. You'll get INSERT statements as output
--- 2. Copy ALL the output
--- 3. Go to your NEW database: https://supabase.com/dashboard/project/0ec90b57d6e95fcbda19832f/sql
--- 4. Paste and run the INSERT statements there
---
--- This will copy all your data from the old database to the new one!
--- ============================================================================
+  UNION ALL
+  SELECT request_id, 'MATCH_OVERRIDE' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE match_override = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'AP_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE ap_inquiry_only = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'CASH_MAINTENANCE' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE cash_maintenance = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'RECEIVABLE_SPECIALIST' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE receivable_specialist = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'RECEIVABLE_SUPERVISOR' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE receivable_supervisor = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'BILLING_CREATE' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE billing_create = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'BILLING_SPECIALIST' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE billing_specialist = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'BILLING_SUPERVISOR' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE billing_supervisor = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'CUSTOMER_MAINTENANCE' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE customer_maintenance_specialist = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'AR_BILLING_SETUP' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE ar_billing_setup = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'AR_BILLING_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE ar_billing_inquiry_only = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'CASH_MGMT_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE cash_management_inquiry_only = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  -- Budget roles
+  UNION ALL
+  SELECT request_id, 'BUDGET_JOURNAL_ENTRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE budget_journal_entry_online = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'BUDGET_JOURNAL_LOAD' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE budget_journal_load = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'BUDGET_JOURNAL_APPROVER' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE journal_approver = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'BUDGET_TRANSFER_ENTRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE budget_transfer_entry_online = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'BUDGET_TRANSFER_APPROVER' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE transfer_approver = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'BUDGET_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE budget_inquiry_only = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  -- General Ledger roles
+  UNION ALL
+  SELECT request_id, 'GL_JOURNAL_ENTRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE journal_entry_online = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'GL_JOURNAL_LOAD' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE journal_load = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'GL_CHARTFIELD_MAINT' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE agency_chartfield_maintenance = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'GL_AGENCY_APPROVER' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE gl_agency_approver = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'GL_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE general_ledger_inquiry_only = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'NVISION_AGENCY_USER' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE nvision_reporting_agency_user = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'DAILY_RECEIPTS_REPORT' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE needs_daily_receipts_report = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  -- Grants Management roles
+  UNION ALL
+  SELECT request_id, 'GM_AWARD_ENTRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE award_data_entry = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'GM_FISCAL_MANAGER' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE grant_fiscal_manager = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'GM_PROGRAM_MANAGER' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE program_manager = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'GM_AGENCY_SETUP' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE gm_agency_setup = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'GM_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE grants_inquiry_only = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  -- Project Costing roles
+  UNION ALL
+  SELECT request_id, 'PC_FEDERAL_INITIATOR' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE federal_project_initiator = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_OIM_INITIATOR' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE oim_initiator = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_PROJECT_INITIATOR' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE project_initiator = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_PROJECT_MANAGER' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE project_manager = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_CAPITAL_PROGRAMS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE capital_programs_office = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_COST_ACCOUNTANT' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE project_cost_accountant = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_FIXED_ASSET' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE project_fixed_asset = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_CATEGORY_MANAGER' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE category_subcategory_manager = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_CONTROL_DATES' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE project_control_dates = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_ACCOUNTING_SYSTEMS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE project_accounting_systems = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_MNDOT_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE mndot_projects_inquiry = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE projects_inquiry_only = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'PC_MNDOT_APPROVER' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE mndot_project_approver = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  -- Cost Allocation & Asset Management roles
+  UNION ALL
+  SELECT request_id, 'COST_ALLOC_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE cost_allocation_inquiry_only = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'AM_FINANCIAL_ACCOUNTANT' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE financial_accountant_assets = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'AM_INQUIRY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE asset_management_inquiry_only = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'AM_INVENTORY_APPROVER_1' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE physical_inventory_approval_1 = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'AM_INVENTORY_APPROVER_2' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE physical_inventory_approval_2 = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  -- ELM roles
+  UNION ALL
+  SELECT request_id, 'ELM_SYSTEM_ADMIN' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE elm_system_administrator = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_KEY_ADMIN' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE elm_key_administrator = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_COURSE_ADMIN' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE elm_course_administrator = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_REPORTING_ADMIN' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE elm_reporting_administrator = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_CREATE_COURSES' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE create_courses = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_EDIT_COURSES' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE edit_courses = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_DELETE_COURSES' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE delete_courses = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_MANAGE_CONTENT' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE manage_course_content = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_MANAGE_USERS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE manage_user_accounts = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_ASSIGN_ROLES' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE assign_user_roles = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_VIEW_PROGRESS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE view_user_progress = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_GENERATE_REPORTS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE generate_user_reports = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_SYSTEM_REPORTS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE access_system_reports = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_CUSTOM_REPORTS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE create_custom_reports = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_EXPORT_DATA' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE export_report_data = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_ANALYTICS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE view_analytics_dashboard = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_CREATE_PATHS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE create_learning_paths = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_EDIT_PATHS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE edit_learning_paths = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_ASSIGN_PATHS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE assign_learning_paths = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_TRACK_PROGRESS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE track_learning_progress = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_MANAGE_CERTS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE manage_certifications = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_ISSUE_CERTS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE issue_certificates = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_TRACK_CERTS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE track_certification_status = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_RENEW_CERTS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE renew_certifications = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_SYSTEM_CONFIG' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE configure_system_settings = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_INTEGRATIONS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE manage_integrations = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_NOTIFICATIONS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE setup_notifications = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_SECURITY' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE manage_security_settings = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_BULK_OPS' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE bulk_user_operations = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_DATA_IMPORT_EXPORT' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE data_import_export = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_BACKUP' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE system_backup_access = true')
+  AS t(request_id uuid, created_at timestamptz)
+
+  UNION ALL
+  SELECT request_id, 'ELM_AUDIT_LOG' as role_code, NULL::jsonb, created_at
+  FROM dblink('dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
+    'SELECT request_id, created_at FROM security_role_selections WHERE audit_log_access = true')
+  AS t(request_id uuid, created_at timestamptz)
+) AS all_roles
+ON CONFLICT (request_id, role_code) DO NOTHING;
+
+-- Summary queries
+SELECT COUNT(*) as total_role_selections_migrated FROM role_selections;
+SELECT role_code, COUNT(*) as count FROM role_selections GROUP BY role_code ORDER BY count DESC;
