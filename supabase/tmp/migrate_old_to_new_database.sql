@@ -11,27 +11,33 @@
 -- NOTE: This script is in supabase/tmp (not migrations) because it's a one-time
 -- data migration, not a schema change
 
--- Step 1: Migrate access_requests table
-INSERT INTO access_requests (
+-- Step 1: Migrate access_requests to security_role_requests
+-- Map old column names to new column names
+-- Old DB has: supervisor_email, security_admin_email
+-- New DB has: supervisor_username, security_admin_username
+INSERT INTO security_role_requests (
   id, created_at, updated_at, start_date, employee_name, employee_id,
   is_non_employee, work_location, work_phone, email, agency_name, agency_code,
-  justification, submitter_name, submitter_email, supervisor_name, supervisor_email,
-  security_admin_name, security_admin_email, status, poc_user, completed_by,
-  completed_at, hr_mainframe_logon_id
+  justification, submitter_name, submitter_email, supervisor_name,
+  supervisor_username, security_admin_name, security_admin_username,
+  status, hr_mainframe_logon_id
 )
 SELECT
   id, created_at, updated_at, start_date, employee_name, employee_id,
-  is_non_employee, work_location, work_phone, email, agency_name, agency_code,
-  justification, submitter_name, submitter_email, supervisor_name, supervisor_email,
-  security_admin_name, security_admin_email, status, poc_user, completed_by,
-  completed_at, hr_mainframe_logon_id
+  is_non_employee, work_location, work_phone, email, agency_name,
+  CAST(agency_code AS text),
+  justification, submitter_name, submitter_email, supervisor_name,
+  supervisor_email as supervisor_username,  -- Map email to username
+  security_admin_name,
+  security_admin_email as security_admin_username,  -- Map email to username
+  status, hr_mainframe_logon_id
 FROM dblink(
   'dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=YOUR_OLD_DB_PASSWORD',
   'SELECT id, created_at, updated_at, start_date, employee_name, employee_id,
           is_non_employee, work_location, work_phone, email, agency_name, agency_code,
-          justification, submitter_name, submitter_email, supervisor_name, supervisor_email,
-          security_admin_name, security_admin_email, status, poc_user, completed_by,
-          completed_at, hr_mainframe_logon_id
+          justification, submitter_name, submitter_email, supervisor_name,
+          supervisor_email, security_admin_name, security_admin_email,
+          status, hr_mainframe_logon_id
    FROM access_requests'
 ) AS t(
   id uuid, created_at timestamptz, updated_at timestamptz, start_date date,
@@ -39,8 +45,7 @@ FROM dblink(
   work_phone text, email text, agency_name text, agency_code char,
   justification text, submitter_name text, submitter_email text,
   supervisor_name text, supervisor_email text, security_admin_name text,
-  security_admin_email text, status text, poc_user text, completed_by text,
-  completed_at timestamptz, hr_mainframe_logon_id text
+  security_admin_email text, status text, hr_mainframe_logon_id text
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -549,6 +554,6 @@ SELECT request_id, role_code, details, created_at FROM (
 ON CONFLICT (request_id, role_code) DO NOTHING;
 
 -- Summary queries
-SELECT COUNT(*) as total_access_requests_migrated FROM access_requests;
+SELECT COUNT(*) as total_requests_migrated FROM security_role_requests;
 SELECT COUNT(*) as total_role_selections_migrated FROM role_selections;
 SELECT role_code, COUNT(*) as count FROM role_selections GROUP BY role_code ORDER BY count DESC LIMIT 20;
