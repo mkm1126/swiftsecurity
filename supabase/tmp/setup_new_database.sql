@@ -32,8 +32,10 @@ CREATE TABLE IF NOT EXISTS public.security_role_requests (
   -- Approver Details
   supervisor_name text,
   supervisor_username text,
+  supervisor_email text,
   security_admin_name text,
   security_admin_username text,
+  security_admin_email text,
 
   -- Security Area
   security_area text,
