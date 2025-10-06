@@ -8,7 +8,6 @@ import { supabase } from './lib/supabase';
 import { toast } from 'sonner';
 import Header from './components/Header';
 import AgencySelect from './components/AgencySelect';
-import UserSelect from './components/UserSelect';
 import { routes, roleRouteByArea, toRolePath } from './lib/routes';
 
 const REQUESTS_TABLE = 'security_role_requests';
@@ -43,44 +42,13 @@ function clearRoleDraftsFromLocalStorage() {
   keysToRemove.forEach((k) => localStorage.removeItem(k));
 }
 
-async function copyExistingUserRoles(newRequestId: string, copyFromEmployeeId: string) {
-  try {
-    const { data: existingRequest } = await supabase
-      .from('security_role_requests')
-      .select('id, status')
-      .eq('employee_id', copyFromEmployeeId)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!existingRequest) return;
-
-    const { data: existingRoles } = await supabase
-      .from('security_role_selections')
-      .select('*')
-      .eq('request_id', existingRequest.id)
-      .maybeSingle();
-    if (!existingRoles) return;
-
-    const { id, created_at, updated_at, request_id, ...rest } = existingRoles as any;
-    const payload = {
-      ...rest,
-      request_id: newRequestId,
-      role_justification: (existingRoles as any).role_justification || 'Copied from existing user access',
-    };
-    await supabase.from('security_role_selections').upsert(payload, { onConflict: 'request_id' });
-  } catch (e) {
-    console.warn('Copy roles failed (non-fatal):', e);
-  }
-}
-
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id: paramId } = useParams();
   const stateId = (location.state as any)?.requestId as string | undefined;
   const effectiveId = (stateId || (paramId as any)) as string | undefined;
-  const ctaLabel = effectiveId ? 'Save and Verify Role Selection' : 'Select Individual Roles';
+  const ctaLabel = effectiveId ? 'Save and Verify Role Selection' : 'Select or Copy Individual Roles';
 
   const {
     register,
@@ -92,8 +60,6 @@ function App() {
     formState: { errors },
   } = useForm<SecurityRoleRequest>();
 
-  const [selectedOption, setSelectedOption] = useState<'copy' | 'select' | null>(null);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [isTestMode, setIsTestMode] = useState(() => localStorage.getItem('testMode') === 'true');
   const [submitting, setSubmitting] = useState(false);
@@ -119,8 +85,6 @@ function App() {
     if (!isTestMode) {
       if (effectiveId) return;
       reset({ startDate: '', employeeName: '', employeeId: '' } as any);
-      setSelectedOption(null);
-      setSelectedUser(null);
     }
   }, [isTestMode, reset, effectiveId]);
 
@@ -483,16 +447,6 @@ function App() {
       } catch (e) {
         console.warn('Non-fatal: upsert role selections failed', e);
       }
-
-      // If copying access
-      if (!isEditing && selectedOption === 'copy' && (selectedUser as any)?.employee_id) {
-        await copyExistingUserRoles(requestId!, (selectedUser as any).employee_id);
-      }
-
-/*      // Save form data before navigating (only for new requests)
-      if (!isEditing) {
-        localStorage.setItem('pendingMainFormData', JSON.stringify(data));
-      } */
 
       // Navigate to the appropriate role selection page based on security area
       let targetRoute = '/select-roles'; // default to accounting/procurement
@@ -1004,69 +958,22 @@ function App() {
                   </div>
                 </div>
 
-                {/* Role Selection Method */}
+                {/* Continue to Role Selection */}
                 <div className="bg-gray-50 p-6 rounded-lg mt-6">
-                  <p className="text-gray-700 mb-4">Choose how you want to set up roles for this request:</p>
-                  <div className="space-y-6">
-                    <div className="flex flex-col space-y-4">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOption('copy')}
-                        className={`p-4 text-left rounded-lg border-2 transition-colors ${
-                          selectedOption === 'copy'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-blue-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        <h4 className="text-lg font-medium text-gray-900">Copy Existing User Access</h4>
-                        <p className="mt-1 text-sm text-gray-500">
-                          Grant the same roles, agency codes, and workflows as an existing user.
-                        </p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOption('select')}
-                        className={`p-4 text-left rounded-lg border-2 transition-colors ${
-                          selectedOption === 'select'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-blue-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        <h4 className="text-lg font-medium text-gray-900">{ctaLabel}</h4>
-                        <p className="mt-1 text-sm text-gray-500">
-                          Choose specific roles and permissions from a comprehensive list.
-                        </p>
-                      </button>
-                    </div>
-
-                    {selectedOption === 'copy' && (
-                      <div className="mt-6 space-y-4 bg-white p-6 rounded-lg border border-gray-200">
-                        <UserSelect
-                          selectedUser={selectedUser}
-                          onUserChange={setSelectedUser as any}
-                          currentUser={currentUser}
-                          formData={watch()}
-                        />
-                      </div>
-                    )}
-
-                    {selectedOption && (
-                      <div className="mt-6">
-                        <button
-                          type="submit"
-                          disabled={submitting || !hasSelectedSecurityArea || (selectedOption === 'copy' && !selectedUser)}
-                          className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                            !submitting && hasSelectedSecurityArea && (selectedOption !== 'copy' || selectedUser)
-                              ? 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-                              : 'bg-gray-400 cursor-not-allowed'
-                          }`}
-                        >
-                          {submitting ? 'Saving…' : selectedOption === 'copy' ? 'Submit Request' : ctaLabel}
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="submit"
+                    disabled={submitting || !hasSelectedSecurityArea}
+                    className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                      !submitting && hasSelectedSecurityArea
+                        ? 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                        : 'bg-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {submitting ? 'Saving…' : ctaLabel}
+                  </button>
+                  <p className="mt-2 text-center text-sm text-gray-500">
+                    You can select individual roles or copy from an existing user on the next page
+                  </p>
                 </div>
               </div>
             </form>
