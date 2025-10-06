@@ -45,7 +45,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Step 2: Migrate security_role_selections (common columns only - NO ELM columns)
 INSERT INTO security_role_selections (
-  id, request_id, created_at, updated_at,
+  id, request_id, created_at,
   home_business_unit, other_business_units,
   voucher_entry, voucher_approver_1, voucher_approver_2, voucher_approver_3,
   maintenance_voucher_build_errors, match_override, ap_inquiry_only,
@@ -72,7 +72,7 @@ INSERT INTO security_role_selections (
   physical_inventory_department_ids
 )
 SELECT
-  id, request_id, created_at, updated_at,
+  id, request_id, created_at,
   home_business_unit, other_business_units,
   voucher_entry, voucher_approver_1, voucher_approver_2, voucher_approver_3,
   maintenance_voucher_build_errors, match_override, ap_inquiry_only,
@@ -99,7 +99,7 @@ SELECT
   physical_inventory_department_ids
 FROM dblink(
   'dbname=postgres host=db.lyzcqbbfmgtxieytskrf.supabase.co port=5432 user=postgres password=Mucfrev@9xe',
-  'SELECT id, request_id, created_at, updated_at,
+  'SELECT id, request_id, created_at,
           home_business_unit, other_business_units,
           voucher_entry, voucher_approver_1, voucher_approver_2, voucher_approver_3,
           maintenance_voucher_build_errors, match_override, ap_inquiry_only,
@@ -126,7 +126,7 @@ FROM dblink(
           physical_inventory_department_ids
    FROM security_role_selections'
 ) AS t(
-  id uuid, request_id uuid, created_at timestamptz, updated_at timestamptz,
+  id uuid, request_id uuid, created_at timestamptz,
   home_business_unit text, other_business_units text,
   voucher_entry boolean, voucher_approver_1 text, voucher_approver_2 text, voucher_approver_3 text,
   maintenance_voucher_build_errors boolean, match_override boolean, ap_inquiry_only boolean,
