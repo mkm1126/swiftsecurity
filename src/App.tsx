@@ -448,6 +448,68 @@ function App() {
         console.warn('Non-fatal: upsert role selections failed', e);
       }
 
+      // Create approval records if this is a new request
+      if (!isEditing && requestId) {
+        try {
+          const approvals = [
+            {
+              request_id: requestId,
+              step: 'user_signature',
+              approver_email: data.submitterEmail,
+              status: 'pending'
+            },
+            {
+              request_id: requestId,
+              step: 'supervisor_approval',
+              approver_email: data.supervisorUsername || data.submitterEmail,
+              status: 'pending'
+            }
+          ];
+
+          // Add area-specific approvals
+          if (data.securityArea === 'accounting_procurement') {
+            approvals.push({
+              request_id: requestId,
+              step: 'accounting_director_approval',
+              approver_email: data.accountingDirectorUsername || data.supervisorUsername || data.submitterEmail,
+              status: 'pending'
+            });
+          } else if (data.securityArea === 'hr_payroll') {
+            approvals.push({
+              request_id: requestId,
+              step: 'hr_director_approval',
+              approver_email: data.hrDirectorEmail || data.supervisorUsername || data.submitterEmail,
+              status: 'pending'
+            });
+          } else if (data.securityArea === 'elm') {
+            approvals.push({
+              request_id: requestId,
+              step: 'elm_admin_approval',
+              approver_email: data.elmKeyAdminUsername || data.supervisorUsername || data.submitterEmail,
+              status: 'pending'
+            });
+          }
+
+          // Always add security admin as final approval
+          approvals.push({
+            request_id: requestId,
+            step: 'security_admin_approval',
+            approver_email: 'security.admin@state.mn.us',
+            status: 'pending'
+          });
+
+          const { error: approvalError } = await supabase
+            .from('request_approvals')
+            .insert(approvals);
+
+          if (approvalError) {
+            console.warn('Warning: Could not create approval records:', approvalError);
+          }
+        } catch (approvalError) {
+          console.warn('Non-fatal: Approval creation failed:', approvalError);
+        }
+      }
+
       // Navigate to the appropriate role selection page based on security area
       let targetRoute = '/select-roles'; // default to accounting/procurement
       if (data.securityArea === 'elm') {
