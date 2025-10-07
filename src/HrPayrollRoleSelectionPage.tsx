@@ -9,13 +9,15 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, Save, Users, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, Users, AlertTriangle, Copy } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { toast } from 'sonner';
 import Header from './components/Header';
 import MultiSelect from './components/MultiSelect';
+import UserSelect from './components/UserSelect';
 import { agencies } from './lib/agencyData';
+import type { User } from './components/UserSelect';
 
 type AccessType = 'agency' | 'department';
 
@@ -249,9 +251,56 @@ function HrPayrollRoleSelectionPage() {
     agency_code?: string;
   } | null>(null);
   const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // agency multiselect local state. Do not pre-populate.
   const [selectedAgencyCodes, setSelectedAgencyCodes] = useState<string[]>([]);
+
+  const handleUserChange = (user: User | null) => setSelectedUser(user);
+
+  const handleUserDetailsLoaded = (data: { userDetails: any; roleSelections: any; normalizedRoles: any }) => {
+    const { normalizedRoles } = data;
+
+    console.log('📥 Auto-populating HR/Payroll form with copied user data:', normalizedRoles);
+    toast.success('Form populated with selected user\'s access permissions');
+
+    const toArray = (val: any): string[] => {
+      if (Array.isArray(val)) return val.map(String).filter(Boolean);
+      if (typeof val === 'string') {
+        return val.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+      }
+      return [];
+    };
+
+    if (normalizedRoles && typeof normalizedRoles === 'object') {
+      for (const [key, value] of Object.entries(normalizedRoles)) {
+        if (['id', 'created_at', 'updated_at', 'request_id'].includes(key)) continue;
+
+        if (typeof value === 'boolean' && value === true) {
+          setValue(key as keyof HrPayrollRoleSelection, true as any, { shouldDirty: true });
+        }
+        else if (typeof value === 'string' && value.trim()) {
+          setValue(key as keyof HrPayrollRoleSelection, value as any, { shouldDirty: true });
+        }
+      }
+
+      const homeBusinessUnit = normalizedRoles.homeBusinessUnit || normalizedRoles.home_business_unit;
+      if (homeBusinessUnit) {
+        const homeBusinessUnitStr = typeof homeBusinessUnit === 'string' ? homeBusinessUnit : String(homeBusinessUnit || '');
+        setValue('homeBusinessUnit' as any, homeBusinessUnitStr, { shouldDirty: true });
+      }
+
+      if (normalizedRoles.otherBusinessUnits) {
+        const otherBU = toArray(normalizedRoles.otherBusinessUnits);
+        setValue('otherBusinessUnits' as any, otherBU, { shouldDirty: true });
+      }
+
+      if (normalizedRoles.agencyCodes) {
+        const agencyCodes = toArray(normalizedRoles.agencyCodes);
+        setSelectedAgencyCodes(agencyCodes);
+      }
+    }
+  };
 
   const {
     register,
@@ -861,6 +910,34 @@ function HrPayrollRoleSelectionPage() {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8">
+              {/* Copy User Section */}
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <Copy className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      Copy Existing User Access (Optional)
+                    </h3>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <p>
+                        You can copy role selections from an existing user who has similar job responsibilities.
+                        This will pre-populate the form with their current access permissions.
+                      </p>
+                    </div>
+                    <div className="mt-4">
+                      <UserSelect
+                        selectedUser={selectedUser}
+                        onUserChange={handleUserChange}
+                        formData={watch()}
+                        onUserDetailsLoaded={handleUserDetailsLoaded}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Agency / Department ID Access */}
               <div className="space-y-6">
                 <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
