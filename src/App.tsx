@@ -67,6 +67,7 @@ function App() {
 
   const selectedSecurityArea = watch('securityArea');
   const hasSelectedSecurityArea = !!selectedSecurityArea;
+  const isNonEmployee = watch('isNonEmployee');
 
   // Listen for user selection in header
   const handleUserChange = (userName: string | null) => setCurrentUser(userName);
@@ -619,6 +620,56 @@ function App() {
                     </div>
                     {errors.employeeId && <p className="mt-1 text-sm text-red-600">{errors.employeeId.message}</p>}
                   </div>
+
+                  {isNonEmployee && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Non-Employee Type*</label>
+                        <select
+                          {...register('nonEmployeeType', { required: isNonEmployee ? 'Non-employee type is required' : false })}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        >
+                          <option value="">Select type...</option>
+                          <option value="contractor">Contractor</option>
+                          <option value="consultant">Consultant</option>
+                          <option value="vendor">Vendor</option>
+                          <option value="temporary">Temporary Worker</option>
+                          <option value="intern">Intern</option>
+                          <option value="other">Other</option>
+                        </select>
+                        {errors.nonEmployeeType && <p className="mt-1 text-sm text-red-600">{errors.nonEmployeeType.message}</p>}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Access End Date*</label>
+                        <input
+                          type="date"
+                          {...register('accessEndDate', {
+                            required: isNonEmployee ? 'Access end date is required for non-employees' : false,
+                            validate: (value) => {
+                              if (!isNonEmployee || !value) return true;
+                              const startDate = watch('startDate');
+                              if (!startDate) return true;
+                              return new Date(value) > new Date(startDate) || 'End date must be after start date';
+                            }
+                          })}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        />
+                        {errors.accessEndDate && <p className="mt-1 text-sm text-red-600">{errors.accessEndDate.message}</p>}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Security Measures*</label>
+                        <textarea
+                          {...register('securityMeasures', { required: isNonEmployee ? 'Security measures description is required' : false })}
+                          rows={3}
+                          placeholder="Describe security measures and oversight for non-employee access..."
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        />
+                        {errors.securityMeasures && <p className="mt-1 text-sm text-red-600">{errors.securityMeasures.message}</p>}
+                      </div>
+                    </>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Work Location</label>
