@@ -130,8 +130,10 @@ function RequestDetailsPage() {
           .eq('request_id', rid);
         const areaTypes = (areas || []).map(a => (a?.area_type || '').toLowerCase());
         if (areaTypes.includes('elm')) rolesRouteBase = '/elm-roles';
+        else if (areaTypes.includes('hr_payroll')) rolesRouteBase = '/hr-payroll-roles';
+        else if (areaTypes.includes('epm_data_warehouse')) rolesRouteBase = '/epm-dwh-roles';
       } catch {}
-      navigate(`${rolesRouteBase}/${rid}`, { state: { requestId: rid } });
+      navigate(`${rolesRouteBase}/${rid}`, { state: { requestId: rid, hydrateFromDb: true } });
     } catch {
       toast.error('Unable to navigate to roles.');
     }

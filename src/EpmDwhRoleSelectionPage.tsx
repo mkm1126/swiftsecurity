@@ -286,30 +286,43 @@ export default function EpmDwhRoleSelectionPage() {
   useEffect(() => {
     if (!requestDetails) return;
 
+    // Check if we should hydrate from database (e.g., from Edit Roles button)
+    const shouldHydrateFromDb = location.state?.hydrateFromDb;
+
+    if (shouldHydrateFromDb) {
+      console.log('📡 Edit mode: Fetching existing selections from Supabase');
+      if (requestId) {
+        fetchExistingSelections(requestId);
+      }
+      return;
+    }
+
     const storageKey = `epmDwhRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
     const savedData = localStorage.getItem(storageKey);
-    
+
     console.log('🔍 Checking for saved EPM DWH form data:', { storageKey, hasSavedData: !!savedData });
 
     if (savedData) {
       try {
         const parsedData = JSON.parse(savedData);
         console.log('📥 Restoring saved EPM DWH form data:', parsedData);
-        
+
         Object.entries(parsedData).forEach(([key, value]) => {
           setValue(key as keyof Form, value as any, { shouldDirty: false });
         });
-        
-        toast.success('Previous selections restored');
+
+        toast.success('Previous selections restored from draft');
       } catch (e) {
         console.error('Error parsing saved data:', e);
         localStorage.removeItem(storageKey);
       }
     } else {
       console.log('📡 No saved data found, fetching existing selections from Supabase');
-      fetchExistingSelections(requestId!);
+      if (requestId) {
+        fetchExistingSelections(requestId);
+      }
     }
-  }, [requestDetails, setValue, requestId]);
+  }, [requestDetails, setValue, requestId, location.state]);
 
   async function fetchRequestDetails(id: string) {
     try {

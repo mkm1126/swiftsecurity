@@ -440,16 +440,27 @@ function HrPayrollRoleSelectionPage() {
   useEffect(() => {
     if (!requestDetails || isEditingCopiedRoles) return;
 
+    // Check if we should hydrate from database (e.g., from Edit Roles button)
+    const shouldHydrateFromDb = location.state?.hydrateFromDb;
+
+    if (shouldHydrateFromDb) {
+      console.log('📡 Edit mode: Fetching existing selections from Supabase');
+      if (requestId) {
+        fetchExistingSelections(requestId);
+      }
+      return;
+    }
+
     const storageKey = `hrPayrollRoles_${requestDetails.employee_name}_${requestDetails.agency_name}`.replace(/[^a-zA-Z0-9]/g, '_');
     const savedData = localStorage.getItem(storageKey);
-    
+
     console.log('🔍 Checking for saved HR/Payroll form data:', { storageKey, hasSavedData: !!savedData });
 
     if (savedData) {
       try {
         const parsedData = JSON.parse(savedData);
         console.log('📥 Restoring saved HR/Payroll form data:', parsedData);
-        
+
         Object.entries(parsedData).forEach(([key, value]) => {
           setValue(key as keyof HrPayrollRoleSelection, value as any, { shouldDirty: false });
         });
@@ -457,24 +468,26 @@ function HrPayrollRoleSelectionPage() {
         // ✅ ADD: hydrate MultiSelect + keep RHF in sync if "By Agency" was used
         const savedCodes = normalizeCodes(parsedData.otherBusinessUnits ?? parsedData.agencyCodes);
         const savedType  = parsedData.addAccessType as AccessType | undefined;
-        
+
         if ((savedType ?? 'agency') === 'agency' && savedCodes.length) {
           setSelectedAgencyCodes(savedCodes);
           setValue('agencyCodes', savedCodes.join(', '), { shouldDirty: false });
           setValue('otherBusinessUnits', savedCodes, { shouldDirty: false });
           setValue('addAccessType', 'agency', { shouldDirty: false });
         }
-        
-        toast.success('Previous selections restored');
+
+        toast.success('Previous selections restored from draft');
       } catch (e) {
         console.error('Error parsing saved data:', e);
         localStorage.removeItem(storageKey);
       }
     } else {
       console.log('📡 No saved data found, fetching existing selections from Supabase');
-      fetchExistingSelections(requestId!);
+      if (requestId) {
+        fetchExistingSelections(requestId);
+      }
     }
-  }, [requestDetails, setValue, requestId, isEditingCopiedRoles]);
+  }, [requestDetails, setValue, requestId, isEditingCopiedRoles, location.state]);
 
   // Load minimal request details, but do not auto-select agencies in the UI
   const fetchRequestDetails = async (id: string) => {
