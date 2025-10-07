@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { supabase } from './lib/supabase';
 import Header from './components/Header';
 import MultiSelect from './components/MultiSelect';
+import { findBusinessUnitByCode } from './lib/businessUnitData';
 
 type LocationState = { state?: { requestId?: string } };
 
@@ -72,6 +73,7 @@ export default function MNITDetailsPage() {
   // Core data from RPC
   const [selectedRoles, setSelectedRoles] = useState<RpcSelectedRole[]>([]);
   const [routeControls, setRouteControls] = useState<RpcRouteControl[]>([]);
+  const [selectionRow, setSelectionRow] = useState<SelectionRow | null>(null);
 
   // Edits keyed by flag_key::control_key
   const [edits, setEdits] = useState<Record<string, string[] | string>>({});
@@ -214,6 +216,9 @@ export default function MNITDetailsPage() {
         setLoading(false);
         return;
       }
+
+      // Store selection row for business units display
+      setSelectionRow(selectionRow);
 
       // Build "selectedRoles"
       const sr: RpcSelectedRole[] = (roleRows || []).map((r: any) => ({
@@ -441,6 +446,52 @@ export default function MNITDetailsPage() {
             </Link>
             {requestId && <CopyIdPill idText={requestId} />}
           </div>
+
+          {/* Home Business Units */}
+          {selectionRow?.home_business_unit && (() => {
+            const hbu = selectionRow.home_business_unit;
+            let businessUnitCodes: string[] = [];
+
+            // Parse home_business_unit based on format
+            if (Array.isArray(hbu)) {
+              businessUnitCodes = hbu;
+            } else if (typeof hbu === 'string' && hbu) {
+              const trimmed = hbu.trim();
+              // Skip empty array representations
+              if (trimmed !== '[]' && trimmed !== '{}' && trimmed !== '') {
+                businessUnitCodes = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+              }
+            }
+
+            if (businessUnitCodes.length === 0) return null;
+
+            return (
+              <div className="bg-white shadow rounded-lg mb-6">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-medium text-gray-900">Home Business Units</h2>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="space-y-2">
+                    {businessUnitCodes.map((code, index) => {
+                      const bu = findBusinessUnitByCode(code);
+                      return (
+                        <div key={index} className="flex items-start">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-blue-100 text-blue-800">
+                            {code}
+                          </span>
+                          {bu && (
+                            <span className="ml-2 text-sm text-gray-600">
+                              {bu.description}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="px-4 py-5 border-b border-gray-200 sm:px-6 flex items-center">
