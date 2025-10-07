@@ -14,6 +14,7 @@ type RoleCatalog = {
   domain: string;
   display_order: number | null;
   requires_route_controls: boolean | null;
+  control_spec: any;
   is_active?: boolean | null;
 };
 
@@ -67,7 +68,7 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
         // Full role catalog (no is_active filter); order by domain + display_order
         const { data: rc, error: rcErr } = await supabase
           .from('role_catalog')
-          .select('flag_key, name, domain, display_order, requires_route_controls, is_active')
+          .select('flag_key, name, domain, display_order, requires_route_controls, control_spec, is_active')
           .order('domain', { ascending: true })
           .order('display_order', { ascending: true, nullsFirst: true });
         if (rcErr) throw rcErr;
@@ -120,6 +121,7 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
         domain: 'other',
         display_order: null,
         requires_route_controls: false,
+        control_spec: null,
         is_active: null,
       });
     }
@@ -165,7 +167,7 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
       <div className="border-b border-gray-200 px-4 py-3">
         <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
         <p className="mt-1 text-xs text-gray-500">
-          Showing all selected roles. Items with route controls are marked with <span className="font-semibold">•</span>.
+          Showing all selected roles with their routing details. Items with routing controls are marked with <span className="font-semibold text-blue-600">•</span>.
         </p>
         {derived.fallbackKeys.length > 0 && (
           <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
@@ -181,13 +183,54 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
             <div className="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">
               {titleCase(domain)}
             </div>
-            <ul className="space-y-1">
-              {roles.map((r) => (
-                <li key={r.flag_key} className="text-sm text-gray-800">
-                  <span className="mr-2">{r.name}</span>
-                  {r.requires_route_controls ? <span title="Requires route controls" className="align-middle">•</span> : null}
-                </li>
-              ))}
+            <ul className="space-y-2">
+              {roles.map((r) => {
+                // Get route control values for this role
+                const routeControls: Array<{ label: string; value: any }> = [];
+                if (r.requires_route_controls && r.control_spec) {
+                  const spec = typeof r.control_spec === 'string'
+                    ? JSON.parse(r.control_spec)
+                    : r.control_spec;
+                  const controls = Array.isArray(spec?.controls) ? spec.controls : [];
+
+                  for (const ctrl of controls) {
+                    const colName = ctrl.column;
+                    const value = selection?.[colName];
+                    if (value !== null && value !== undefined && value !== '' && value !== false) {
+                      // Format the value nicely
+                      let displayValue = value;
+                      if (Array.isArray(value)) {
+                        displayValue = value.join(', ');
+                      } else if (typeof value === 'string' && value.includes('\n')) {
+                        displayValue = value.split('\n').filter(Boolean).join(', ');
+                      }
+                      routeControls.push({
+                        label: ctrl.label || colName,
+                        value: displayValue
+                      });
+                    }
+                  }
+                }
+
+                return (
+                  <li key={r.flag_key} className="text-sm">
+                    <div className="text-gray-800 font-medium">
+                      {r.name}
+                      {r.requires_route_controls && <span title="Has routing details" className="ml-1 text-blue-600">•</span>}
+                    </div>
+                    {routeControls.length > 0 && (
+                      <div className="ml-4 mt-1 space-y-1">
+                        {routeControls.map((rc, idx) => (
+                          <div key={idx} className="text-xs text-gray-600">
+                            <span className="font-medium">{rc.label}:</span>{' '}
+                            <span className="text-gray-700">{rc.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))}
