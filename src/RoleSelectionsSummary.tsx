@@ -92,6 +92,10 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
 
     if (!selection) return { pickedFromCatalog, fallbackKeys, grouped: [] as Array<[string, RoleCatalog[]]>, total: 0 };
 
+    console.log('🔍 RoleSelectionsSummary - catalog length:', catalog.length);
+    console.log('🔍 RoleSelectionsSummary - roles with requires_route_controls:',
+      catalog.filter(r => r.requires_route_controls).map(r => r.flag_key));
+
     const seen = new Set<string>();
     // 1) walk catalog to find selected roles
     for (const rc of catalog) {
@@ -101,6 +105,7 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
       const vCamel = selection[camel];
       const isSelected = isTruthy(vSnake) || isTruthy(vCamel);
       if (isSelected) {
+        console.log(`🔍 Selected role: ${rc.flag_key}, requires_route_controls: ${rc.requires_route_controls}, control_spec:`, rc.control_spec);
         pickedFromCatalog.push(rc);
         seen.add(snake);
         seen.add(camel);
@@ -188,15 +193,19 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
                 // Get route control values for this role
                 const routeControls: Array<{ label: string; value: any }> = [];
                 if (r.requires_route_controls && r.control_spec) {
+                  console.log(`🔍 Processing route controls for role: ${r.flag_key}`);
                   try {
                     const spec = typeof r.control_spec === 'string'
                       ? JSON.parse(r.control_spec)
                       : r.control_spec;
+                    console.log(`🔍 Parsed spec for ${r.flag_key}:`, spec);
                     const controls = Array.isArray(spec?.controls) ? spec.controls : [];
+                    console.log(`🔍 Controls array for ${r.flag_key}:`, controls);
 
                     for (const ctrl of controls) {
                       const colName = ctrl.column;
                       const value = selection?.[colName];
+                      console.log(`🔍 Checking column ${colName} for ${r.flag_key}, value:`, value);
                       if (value !== null && value !== undefined && value !== '' && value !== false) {
                         // Format the value nicely
                         let displayValue = value;
