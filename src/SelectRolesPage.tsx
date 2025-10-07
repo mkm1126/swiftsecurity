@@ -45,7 +45,8 @@ type CopyFlowForm = {
 
 function SelectRolesPage() {
   // --- config ---------------------------------------------------------------
-  const HOME_BU_IS_ARRAY = true;
+  // Set to false because home_business_unit column is text (comma-separated), not text[] (array)
+  const HOME_BU_IS_ARRAY = false;
 
   // Absolutely no auto-restore unless explicitly requested via router state.
   const ALLOW_AUTO_RESTORE = false;
