@@ -92,6 +92,9 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
 
     if (!selection) return { pickedFromCatalog, fallbackKeys, grouped: [] as Array<[string, RoleCatalog[]]>, total: 0 };
 
+    console.log('🔍 RoleSelectionsSummary - Total catalog entries:', catalog.length);
+    console.log('🔍 RoleSelectionsSummary - Roles with route controls:', catalog.filter(r => r.requires_route_controls).length);
+
     const seen = new Set<string>();
     // 1) walk catalog to find selected roles
     for (const rc of catalog) {
@@ -104,6 +107,9 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
         pickedFromCatalog.push(rc);
         seen.add(snake);
         seen.add(camel);
+        if (rc.requires_route_controls) {
+          console.log('🔍 Selected role with route controls:', rc.flag_key, rc.name, 'control_spec:', rc.control_spec);
+        }
       }
     }
 
