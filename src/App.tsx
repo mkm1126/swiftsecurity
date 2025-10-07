@@ -432,21 +432,20 @@ function App() {
         }
       }
 
-      // Ensure selections row exists so roles can hydrate
-      try {
-        await supabase
-          .from('security_role_selections')
-          .upsert(
-            {
+      // Ensure selections row exists so roles can hydrate (only for new requests)
+      // When editing, we don't touch role selections - those are managed on the role selection page
+      if (!isEditing) {
+        try {
+          await supabase
+            .from('security_role_selections')
+            .insert({
               request_id: requestId,
-              home_business_unit: Array.isArray(data.homeBusinessUnit)
-                ? data.homeBusinessUnit
-                : [data.homeBusinessUnit].filter(Boolean),
-            },
-            { onConflict: 'request_id' }
-          );
-      } catch (e) {
-        console.warn('Non-fatal: upsert role selections failed', e);
+              // Don't set home_business_unit - it will be set on role selection page
+            });
+        } catch (e) {
+          // Ignore errors - row might already exist
+          console.warn('Non-fatal: insert role selections failed', e);
+        }
       }
 
       // Create approval records if this is a new request
