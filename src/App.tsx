@@ -520,7 +520,13 @@ function App() {
       } else if (data.securityArea === 'epm_data_warehouse') {
         targetRoute = '/epm-dwh-roles';
       }
-      navigate(`${targetRoute}/${requestId}`, { state: { requestId } });
+      // When editing, pass hydrateFromDb flag to load existing roles from database
+      navigate(`${targetRoute}/${requestId}`, {
+        state: {
+          requestId,
+          hydrateFromDb: isEditing // Load existing roles when editing
+        }
+      });
     } catch (error: any) {
       console.error('Submit error (strict security_role_requests):', error);
 
