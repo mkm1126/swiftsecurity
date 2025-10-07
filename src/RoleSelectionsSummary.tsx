@@ -188,27 +188,37 @@ const RoleSelectionsSummary: React.FC<Props> = ({ requestId, title = 'Role Selec
                 // Get route control values for this role
                 const routeControls: Array<{ label: string; value: any }> = [];
                 if (r.requires_route_controls && r.control_spec) {
-                  const spec = typeof r.control_spec === 'string'
-                    ? JSON.parse(r.control_spec)
-                    : r.control_spec;
-                  const controls = Array.isArray(spec?.controls) ? spec.controls : [];
+                  console.log('🔍 Role with route controls:', r.flag_key, r.name);
+                  try {
+                    const spec = typeof r.control_spec === 'string'
+                      ? JSON.parse(r.control_spec)
+                      : r.control_spec;
+                    console.log('🔍 Control spec:', spec);
+                    const controls = Array.isArray(spec?.controls) ? spec.controls : [];
+                    console.log('🔍 Controls array:', controls);
 
-                  for (const ctrl of controls) {
-                    const colName = ctrl.column;
-                    const value = selection?.[colName];
-                    if (value !== null && value !== undefined && value !== '' && value !== false) {
-                      // Format the value nicely
-                      let displayValue = value;
-                      if (Array.isArray(value)) {
-                        displayValue = value.join(', ');
-                      } else if (typeof value === 'string' && value.includes('\n')) {
-                        displayValue = value.split('\n').filter(Boolean).join(', ');
+                    for (const ctrl of controls) {
+                      const colName = ctrl.column;
+                      const value = selection?.[colName];
+                      console.log(`🔍 Checking ${colName}:`, value);
+                      if (value !== null && value !== undefined && value !== '' && value !== false) {
+                        // Format the value nicely
+                        let displayValue = value;
+                        if (Array.isArray(value)) {
+                          displayValue = value.join(', ');
+                        } else if (typeof value === 'string' && value.includes('\n')) {
+                          displayValue = value.split('\n').filter(Boolean).join(', ');
+                        }
+                        console.log(`✅ Adding route control: ${ctrl.label || colName} = ${displayValue}`);
+                        routeControls.push({
+                          label: ctrl.label || colName,
+                          value: displayValue
+                        });
                       }
-                      routeControls.push({
-                        label: ctrl.label || colName,
-                        value: displayValue
-                      });
                     }
+                    console.log('🔍 Final routeControls for', r.flag_key, ':', routeControls);
+                  } catch (err) {
+                    console.error('❌ Error parsing control_spec for', r.flag_key, ':', err);
                   }
                 }
 
