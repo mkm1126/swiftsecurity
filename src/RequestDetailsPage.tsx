@@ -7,7 +7,8 @@ import Header from './components/Header';
 import RoleSelectionsSummary from './RoleSelectionsSummary'; // ✅ NEW: shows all selected roles robustly
 import { routes, roleRouteByArea, toRolePath } from './lib/routes';
 import type { SecurityArea } from './lib/routes';
-import { findBusinessUnitByCode } from './lib/businessUnitData'; 
+import { findBusinessUnitByCode } from './lib/businessUnitData';
+import { findAgencyByCode } from './lib/agencyData'; 
 
 interface RequestDetails {
 
@@ -839,13 +840,24 @@ function RequestDetailsPage() {
               </div>
               <div className="px-6 py-4">
                 <div className="space-y-2">
-                  {agencyCodes.map((code, index) => (
-                    <div key={index} className="flex items-start">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-green-100 text-green-800">
-                        {code}
-                      </span>
-                    </div>
-                  ))}
+                  {agencyCodes.map((code, index) => {
+                    const agency = findAgencyByCode(code);
+                    return (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {agency?.name || 'Unknown Agency'}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Agency Code: {code}
+                          </div>
+                        </div>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                          {code}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
