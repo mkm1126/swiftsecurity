@@ -53,16 +53,20 @@ export default function MNITDetailsPage() {
   const { id: routeId } = useParams<{ id: string }>();
 
   // Determine where the user came from for dynamic back navigation
-  const fromSource = (location.state as any)?.from;
-  const getBackLink = (requestId: string | null) => {
-    if (fromSource === 'requestList') {
-      return { to: '/requests', text: 'Back to Request List' };
-    } else if (fromSource === 'requestDetails' && requestId) {
-      return { to: `/requests/${requestId}`, text: 'Back to Request Details' };
-    } else {
-      return { to: '/', text: 'Back to Main Form' };
-    }
-  };
+  // Memoize fromSource to prevent unnecessary re-renders
+  const fromSource = useMemo(() => (location.state as any)?.from, [location.state]);
+
+  const getBackLink = useMemo(() => {
+    return (requestId: string | null) => {
+      if (fromSource === 'requestList') {
+        return { to: '/requests', text: 'Back to Request List' };
+      } else if (fromSource === 'requestDetails' && requestId) {
+        return { to: `/requests/${requestId}`, text: 'Back to Request Details' };
+      } else {
+        return { to: '/', text: 'Back to Main Form' };
+      }
+    };
+  }, [fromSource]);
 
   const [requestId, setRequestId] = useState<string | null>(null);
   const [who, setWho] = useState<{ employee?: string; agency?: string }>({});
@@ -88,19 +92,24 @@ export default function MNITDetailsPage() {
   } | null>(null);
 
   // Compute back link based on source and requestId
-  const backLink = useMemo(() => getBackLink(requestId), [fromSource, requestId]);
+  const backLink = useMemo(() => getBackLink(requestId), [getBackLink, requestId]);
 
   // ID source of truth (route param first, then state)
+  // Extract requestId from location.state once to prevent re-renders
+  const locationRequestId = useMemo(() =>
+    (location as any)?.state?.requestId as string | undefined,
+    [location.state]
+  );
+
   useEffect(() => {
-    const idFromState = (location as any)?.state?.requestId as string | undefined;
-    const id = routeId || idFromState;
+    const id = routeId || locationRequestId;
     if (!id) {
       toast.error('Missing request id.');
       navigate('/');
       return;
     }
     setRequestId(id);
-  }, [routeId, location, navigate]);
+  }, [routeId, locationRequestId, navigate]);
 
   // Load "who" and payload
   useEffect(() => {

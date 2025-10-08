@@ -10,8 +10,6 @@ interface HeaderProps {
 }
 
 function Header({ title, subtitle, onUserChange }: HeaderProps) {
-  console.log('Header component rendered with:', { title, subtitle });
-  
   const navigate = useNavigate();
   const location = useLocation();
   const isMainPage = location.pathname === '/';
