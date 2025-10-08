@@ -765,8 +765,8 @@ function RequestDetailsPage() {
           </div>
         )}
 
-        {/* Home Business Units */}
-        {roleSelections?.home_business_unit && (() => {
+        {/* Home Business Units - Only show for Accounting/Procurement (SWIFT) security area */}
+        {securityAreas.some(area => area.area_type === 'accounting_procurement') && roleSelections?.home_business_unit && (() => {
           const hbu = roleSelections.home_business_unit;
           let businessUnitCodes: string[] = [];
 
