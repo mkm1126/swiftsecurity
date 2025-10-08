@@ -69,7 +69,8 @@ export default function MNITDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
-  const [securityAreas, setSecurityAreas] = useState<Array<{ area_type: string }>>([]);
+  const [securityAreas, setSecurityAreas] = useState<Array<{ area_type: string; director_name?: string }>>([]);
+  const [requestInfo, setRequestInfo] = useState<any>(null);
 
   // Core data from RPC
   const [selectedRoles, setSelectedRoles] = useState<RpcSelectedRole[]>([]);
@@ -108,18 +109,21 @@ export default function MNITDetailsPage() {
       setLoading(true);
       setDebug(null);
 
-      // Who
+      // Fetch full request info
       const whoQ = await supabase
         .from('security_role_requests')
-        .select('employee_name, agency_name')
+        .select('*')
         .eq('id', requestId)
         .single();
-      if (whoQ.data) setWho({ employee: whoQ.data.employee_name, agency: whoQ.data.agency_name });
+      if (whoQ.data) {
+        setWho({ employee: whoQ.data.employee_name, agency: whoQ.data.agency_name });
+        setRequestInfo(whoQ.data);
+      }
 
-      // Fetch security areas for conditional display
+      // Fetch security areas with director names for display
       const { data: areasData } = await supabase
         .from('security_areas')
-        .select('area_type')
+        .select('area_type, director_name')
         .eq('request_id', requestId);
       console.log('🔍 Security areas fetched:', areasData);
       if (areasData) setSecurityAreas(areasData);
@@ -481,6 +485,85 @@ export default function MNITDetailsPage() {
             </Link>
             {requestId && <CopyIdPill idText={requestId} />}
           </div>
+
+          {/* Request Information */}
+          {requestInfo && (
+            <div className="bg-white shadow rounded-lg mb-6">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">Request Information</h2>
+              </div>
+              <div className="px-6 py-4">
+                <dl className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Employee Name</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{requestInfo.employee_name || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Employee ID</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{requestInfo.employee_id || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Agency</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{requestInfo.agency_name || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Job Title</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{requestInfo.job_title || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Supervisor Name</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{requestInfo.supervisor_name || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Supervisor Email</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{requestInfo.supervisor_email || '—'}</dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-sm font-medium text-gray-500">Justification</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{requestInfo.justification || '—'}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          )}
+
+          {/* Security Areas */}
+          {securityAreas.length > 0 && (
+            <div className="bg-white shadow rounded-lg mb-6">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">Security Areas</h2>
+              </div>
+              <div className="px-6 py-4">
+                <div className="space-y-3">
+                  {securityAreas.map((area, index) => {
+                    const areaLabels: Record<string, string> = {
+                      accounting_procurement: 'Accounting and Procurement (SWIFT)',
+                      hr_payroll: 'HR and Payroll',
+                      elm: 'Enterprise Learning Management (ELM)',
+                      epm_data_warehouse: 'EPM Data Warehouse'
+                    };
+                    return (
+                      <div key={index} className="flex items-start justify-between p-3 bg-gray-50 rounded-md">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {areaLabels[area.area_type] || area.area_type}
+                          </div>
+                          {area.director_name && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Director: {area.director_name}
+                            </div>
+                          )}
+                        </div>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                          {area.area_type}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Home Business Units - Only show for Accounting/Procurement (SWIFT) security area */}
           {securityAreas.some(area => area.area_type === 'accounting_procurement') && selectionRow?.home_business_unit && (() => {
