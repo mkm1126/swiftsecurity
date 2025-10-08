@@ -680,7 +680,7 @@ export default function EpmDwhRoleSelectionPage() {
                           placeholder="Select one or more agencies..."
                         />
                         <p className="mt-2 text-xs text-gray-500">
-                          Select one or more agency codes for agency-specific EPM roles (e.g., M_EPM_DOT_BASIC_RPT_DEVELOPER, M_EPM_MDH_BASIC_RPT_DEVELOPER). Each selected agency will generate a separate role code.
+                          Select one or more agency codes for agency-specific roles.
                         </p>
                       </td>
                     </tr>
