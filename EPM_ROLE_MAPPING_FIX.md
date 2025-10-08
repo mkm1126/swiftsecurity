@@ -41,14 +41,21 @@ Updated the field mappings in **two locations** within `/src/EpmDwhRoleSelection
 ```typescript
 const mappings: Record<string, keyof Form> = {
   data_extracts: 'dataExtracts',
-  basic_report_dev: 'gwBasicReportDev',          // ✅ Fixed
-  advanced_report_dev: 'gwAdvancedReportDev',    // ✅ Fixed
-  dashboard_developer: 'gwDashboardDeveloper',   // ✅ Fixed
-  agency_administrator: 'gwAgencyAdministrator',  // ✅ Fixed
+  basic_report_dev: 'gwBasicReportDev',          // ✅ Fixed (removed gw_ prefix)
+  advanced_report_dev: 'gwAdvancedReportDev',    // ✅ Fixed (removed gw_ prefix)
+  dashboard_developer: 'gwDashboardDeveloper',   // ✅ Fixed (removed gw_ prefix)
+  agency_administrator: 'gwAgencyAdministrator',  // ✅ Fixed (removed gw_ prefix)
   gw_agency_code: 'gwAgencyCode',                // ✅ Correct (has gw_ prefix)
+  private_by_department: 'hrPrivateByDepartment', // ✅ Fixed (removed hr_ prefix)
+  statewide_data: 'hrStatewideData',             // ✅ Fixed (removed hr_ prefix)
+  data_excluded_employees: 'hrDataExcludedEmployees', // ✅ Fixed (removed hr_ prefix)
   // ... rest of mappings
 };
 ```
+
+**Summary of All Fixes:**
+1. EPM roles: Removed incorrect `gw_` prefix (4 fields)
+2. HR/Payroll roles: Removed incorrect `hr_` prefix (3 fields)
 
 ## Impact
 
@@ -96,13 +103,18 @@ To test the fix:
 The correct column names in `security_role_selections` table:
 
 ```sql
--- EPM Data Warehouse columns (from migration)
-data_extracts           boolean DEFAULT false
-basic_report_dev        boolean DEFAULT false  -- No gw_ prefix
-advanced_report_dev     boolean DEFAULT false  -- No gw_ prefix
-dashboard_developer     boolean DEFAULT false  -- No gw_ prefix
-agency_administrator    boolean DEFAULT false  -- No gw_ prefix
-gw_agency_code         text                   -- Has gw_ prefix (used for agency code)
+-- EPM Data Warehouse columns (from migration 20251007140000_add_epm_dwh_columns.sql)
+data_extracts              boolean DEFAULT false
+basic_report_dev           boolean DEFAULT false  -- No gw_ prefix
+advanced_report_dev        boolean DEFAULT false  -- No gw_ prefix
+dashboard_developer        boolean DEFAULT false  -- No gw_ prefix
+agency_administrator       boolean DEFAULT false  -- No gw_ prefix
+gw_agency_code            text                   -- Has gw_ prefix (used for agency code)
+
+-- HR/Payroll columns (from migration 20251007140000_add_epm_dwh_columns.sql)
+private_by_department      boolean DEFAULT false  -- No hr_ prefix
+statewide_data            boolean DEFAULT false  -- No hr_ prefix
+data_excluded_employees   boolean DEFAULT false  -- No hr_ prefix
 ```
 
 ## Build Status
