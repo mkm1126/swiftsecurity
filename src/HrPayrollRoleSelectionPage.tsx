@@ -252,7 +252,6 @@ function HrPayrollRoleSelectionPage() {
   } | null>(null);
   const [isEditingCopiedRoles, setIsEditingCopiedRoles] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [showCopySection, setShowCopySection] = useState(false);
 
   // agency multiselect local state. Do not pre-populate.
   const [selectedAgencyCodes, setSelectedAgencyCodes] = useState<string[]>([]);
@@ -912,30 +911,22 @@ function HrPayrollRoleSelectionPage() {
 
             <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-8">
               {/* Copy User Section */}
-              {!isEditingCopiedRoles && requestId && (
-                <div className="border-b border-gray-200 pb-6">
-                  <button
-                    type="button"
-                    onClick={() => setShowCopySection(!showCopySection)}
-                    className="flex items-center justify-between w-full text-left"
-                  >
-                    <div className="flex items-center">
-                      <Copy className="h-5 w-5 text-blue-600 mr-2" />
-                      <h3 className="text-lg font-medium text-gray-900">
-                        Copy Existing User Access (Optional)
-                      </h3>
-                    </div>
-                    <span className="text-sm text-gray-500">
-                      {showCopySection ? 'Hide' : 'Show'}
-                    </span>
-                  </button>
-
-                  {showCopySection && (
-                    <div className="mt-4">
-                      <p className="text-sm text-gray-600 mb-4">
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <Copy className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      Copy Existing User Access (Optional)
+                    </h3>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <p>
                         You can copy role selections from an existing user who has similar job responsibilities.
                         This will pre-populate the form with their current access permissions.
                       </p>
+                    </div>
+                    <div className="mt-4">
                       <UserSelect
                         selectedUser={selectedUser}
                         onUserChange={handleUserChange}
@@ -943,9 +934,9 @@ function HrPayrollRoleSelectionPage() {
                         onUserDetailsLoaded={handleUserDetailsLoaded}
                       />
                     </div>
-                  )}
+                  </div>
                 </div>
-              )}
+              </div>
 
               {/* Agency / Department ID Access */}
               <div className="space-y-6">

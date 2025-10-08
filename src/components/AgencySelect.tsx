@@ -1,112 +1,158 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Search } from 'lucide-react';
-import { agencies } from '../lib/agencyData';
+import React, { useState } from 'react';
+import { 
+  agencies, 
+  healthLicensingBoards, 
+  smartAgencies,
+  findAgencyByName, 
+  findHealthLicensingBoardByName,
+  findSmartAgencyByName 
+} from '../lib/agencyData';
+import SearchableSelect from './SearchableSelect';
 
 interface AgencySelectProps {
   value: string;
-  onChange: (name: string, code: string) => void;
+  onChange: (agencyName: string, agencyCode: string) => void;
   error?: string;
   required?: boolean;
-  disabled?: boolean;
 }
 
-export default function AgencySelect({
-  value,
-  onChange,
-  error,
-  required = false,
-  disabled = false,
-}: AgencySelectProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const dropdownRef = useRef<HTMLDivElement>(null);
+function AgencySelect({ value, onChange, error, required = false }: AgencySelectProps) {
+  const [showHealthBoards, setShowHealthBoards] = useState(false);
+  const [showSmartAgencies, setShowSmartAgencies] = useState(false);
+  const [selectedHealthBoard, setSelectedHealthBoard] = useState('');
+  const [selectedSmartAgency, setSelectedSmartAgency] = useState('');
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+  const handleAgencyChange = (selectedAgencyName: string) => {
+    if (selectedAgencyName === 'Health Licensing Boards') {
+      setShowHealthBoards(true);
+      setShowSmartAgencies(false);
+      setSelectedHealthBoard('');
+      setSelectedSmartAgency('');
+      // Don't set the agency code yet, wait for health board selection
+      onChange(selectedAgencyName, '');
+    } else if (selectedAgencyName === 'SMART') {
+      setShowSmartAgencies(true);
+      setShowHealthBoards(false);
+      setSelectedHealthBoard('');
+      setSelectedSmartAgency('');
+      // Don't set the agency code yet, wait for SMART agency selection
+      onChange(selectedAgencyName, '');
+    } else {
+      setShowHealthBoards(false);
+      setShowSmartAgencies(false);
+      setSelectedHealthBoard('');
+      setSelectedSmartAgency('');
+      const agency = findAgencyByName(selectedAgencyName);
+      
+      if (agency) {
+        onChange(agency.name, agency.code);
+      } else {
+        onChange(selectedAgencyName, '');
       }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const filteredAgencies = agencies.filter(agency =>
-    agency.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    agency.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleSelect = (agency: { name: string; code: string }) => {
-    onChange(agency.name, agency.code);
-    setIsOpen(false);
-    setSearchTerm('');
+    }
   };
 
+  const handleHealthBoardChange = (selectedBoardName: string) => {
+    setSelectedHealthBoard(selectedBoardName);
+    
+    const healthBoard = findHealthLicensingBoardByName(selectedBoardName);
+    
+    if (healthBoard) {
+      // Set the agency name to the specific health board name and use its code
+      onChange(healthBoard.name, healthBoard.code);
+    } else {
+      onChange(selectedBoardName, '');
+    }
+  };
+
+  const handleSmartAgencyChange = (selectedSmartAgencyName: string) => {
+    setSelectedSmartAgency(selectedSmartAgencyName);
+    
+    const smartAgency = findSmartAgencyByName(selectedSmartAgencyName);
+    
+    if (smartAgency) {
+      // Set the agency name to the specific SMART agency name and use its code
+      onChange(smartAgency.name, smartAgency.code);
+    } else {
+      onChange(selectedSmartAgencyName, '');
+    }
+  };
+
+  // Determine what to show in the main dropdown
+  const getMainDropdownValue = () => {
+    if (showHealthBoards) return 'Health Licensing Boards';
+    if (showSmartAgencies) return 'SMART';
+    return value;
+  };
+
+  // Convert agencies to options format for SearchableSelect
+  const agencyOptions = agencies.map(agency => ({
+    value: agency.name,
+    label: agency.name
+  }));
+
+  // Convert health licensing boards to options format
+  const healthBoardOptions = healthLicensingBoards.map(board => ({
+    value: board.name,
+    label: board.name
+  }));
+
+  // Convert SMART agencies to options format
+  const smartAgencyOptions = smartAgencies.map(agency => ({
+    value: agency.name,
+    label: agency.name
+  }));
+
   return (
-    <div className="space-y-1" ref={dropdownRef}>
-      <label className="block text-sm font-medium text-gray-700">
-        Agency
-        {required && <span className="text-red-500 ml-1">*</span>}
-      </label>
-
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          disabled={disabled}
-          className={`w-full px-3 py-2 text-left bg-white border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-            error ? 'border-red-300' : 'border-gray-300'
-          } ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'cursor-pointer'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className={value ? 'text-gray-900' : 'text-gray-500'}>
-              {value || 'Select an agency...'}
-            </span>
-            <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} />
-          </div>
-        </button>
-
-        {isOpen && (
-          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-hidden">
-            <div className="p-2 border-b border-gray-200">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search agencies..."
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-            </div>
-
-            <div className="max-h-48 overflow-y-auto">
-              {filteredAgencies.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-gray-500">No agencies found</div>
-              ) : (
-                filteredAgencies.map((agency) => (
-                  <button
-                    key={agency.code}
-                    type="button"
-                    onClick={() => handleSelect(agency)}
-                    className="w-full text-left px-4 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
-                  >
-                    <div className="text-sm text-gray-900">{agency.name}</div>
-                    <div className="text-xs text-gray-500">{agency.code}</div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+    <div className="space-y-4">
+      <div>
+        <SearchableSelect
+          options={agencyOptions}
+          value={getMainDropdownValue()}
+          onChange={handleAgencyChange}
+          placeholder="Search agencies..."
+          label="Agency Name"
+          required={required}
+          error={error}
+          searchPlaceholder="Search agencies..."
+        />
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600">{error}</p>
+      {showHealthBoards && (
+        <div>
+          <SearchableSelect
+            options={healthBoardOptions}
+            value={selectedHealthBoard}
+            onChange={handleHealthBoardChange}
+            placeholder="Search health licensing boards..."
+            label="Select Health Licensing Board"
+            required={required}
+            searchPlaceholder="Search health licensing boards..."
+          />
+          <p className="mt-1 text-sm text-gray-500">
+            Please select the specific health licensing board from the list above.
+          </p>
+        </div>
+      )}
+
+      {showSmartAgencies && (
+        <div>
+          <SearchableSelect
+            options={smartAgencyOptions}
+            value={selectedSmartAgency}
+            onChange={handleSmartAgencyChange}
+            placeholder="Search SMART agencies..."
+            label="Select SMART Agency"
+            required={required}
+            searchPlaceholder="Search SMART agencies..."
+          />
+          <p className="mt-1 text-sm text-gray-500">
+            Please select the specific SMART agency from the list above.
+          </p>
+        </div>
       )}
     </div>
   );
 }
+
+export default AgencySelect;
