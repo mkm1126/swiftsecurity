@@ -121,6 +121,7 @@ export default function MNITDetailsPage() {
         .from('security_areas')
         .select('area_type')
         .eq('request_id', requestId);
+      console.log('🔍 Security areas fetched:', areasData);
       if (areasData) setSecurityAreas(areasData);
 
       // Load existing route control values from security_role_selections
@@ -179,6 +180,11 @@ export default function MNITDetailsPage() {
 
         setSelectedRoles(roles);
         setRouteControls(enhancedControls);
+
+        // Store selection row for business units and agency codes display
+        setSelectionRow(selectionData as SelectionRow);
+        console.log('🔍 Selection row set with home_business_unit:', selectionData?.home_business_unit);
+        console.log('🔍 Selection row set with gw_agency_code:', selectionData?.gw_agency_code);
 
         // Initialize edits from existing values (treat "array" like multiselect)
         const init: Record<string, string[] | string> = {};
