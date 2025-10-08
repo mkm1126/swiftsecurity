@@ -64,6 +64,7 @@ function App() {
   const [isTestMode, setIsTestMode] = useState(() => localStorage.getItem('testMode') === 'true');
   const [submitting, setSubmitting] = useState(false);
   const [hasRestoredData, setHasRestoredData] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const selectedSecurityArea = watch('securityArea');
   const hasSelectedSecurityArea = !!selectedSecurityArea;
@@ -126,9 +127,14 @@ function App() {
     }
   }, [effectiveId, hasRestoredData, reset, location.state, location.key]);
 
+  // Mark as initialized after first render to prevent cascading effects
+  useEffect(() => {
+    setIsInitialized(true);
+  }, []);
 
   // Autofill test data (skip during edit or after restore)
   useEffect(() => {
+    if (!isInitialized) return;
     if (effectiveId || hasRestoredData) return;
     if (!(isTestMode && currentUser)) return;
 
@@ -166,6 +172,7 @@ function App() {
 
   // Separate effect to handle security area-specific test data
   useEffect(() => {
+    if (!isInitialized) return;
     if (effectiveId || hasRestoredData) return;
     if (!(isTestMode && currentUser && selectedSecurityArea)) return;
 
