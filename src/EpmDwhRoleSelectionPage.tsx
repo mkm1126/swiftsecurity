@@ -637,21 +637,23 @@ export default function EpmDwhRoleSelectionPage() {
                     <tr>
                       <td className="px-6 py-4">
                         <label className="block text-sm font-medium text-gray-700">
-                          Agency Code (3 characters) for agency-specific roles*
+                          Agency Code (from main form)
                         </label>
-                        <input
-                          type="text"
-                          {...register('gwAgencyCode')}
-                          value={gwAgencyCode ?? ''}
-                          onChange={(e) =>
-                            setValue('gwAgencyCode', e.target.value.toUpperCase().slice(0, 3))
-                          }
-                          maxLength={3}
-                          placeholder="e.g., DOT"
-                          className="mt-1 w-24 text-center tracking-widest uppercase rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        />
+                        <div className="mt-1 flex items-center">
+                          <input
+                            type="text"
+                            {...register('gwAgencyCode')}
+                            value={gwAgencyCode ?? ''}
+                            readOnly
+                            disabled
+                            className="w-24 text-center tracking-widest uppercase rounded-md border-gray-300 bg-gray-50 text-gray-600 shadow-sm cursor-not-allowed"
+                          />
+                          <span className="ml-3 text-sm text-gray-500">
+                            {requestDetails?.agency_name || 'Loading...'}
+                          </span>
+                        </div>
                         <p className="mt-1 text-xs text-gray-500">
-                          Used only to assign the user to the appropriate agency dashboard in OBIEE.
+                          This agency code is automatically set from the User Details section of the main form and will be used for agency-specific EPM role codes (e.g., M_EPM_{gwAgencyCode ?? 'XXX'}_BASIC_RPT_DEVELOPER).
                         </p>
                       </td>
                     </tr>
