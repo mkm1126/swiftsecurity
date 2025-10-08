@@ -153,6 +153,27 @@ export default function MNITDetailsPage() {
         const roles = Array.isArray(rpc.data.selectedRoles) ? (rpc.data.selectedRoles as RpcSelectedRole[]) : [];
         const controls = Array.isArray(rpc.data.routeControls) ? (rpc.data.routeControls as RpcRouteControl[]) : [];
 
+        // Also get ALL selected flags from security_role_selections (boolean = true)
+        // to show roles even if they don't have catalog entries
+        const trueFlags = Object.entries(selectionData || {})
+          .filter(([k, v]) => typeof v === 'boolean' && v === true)
+          .map(([k]) => k);
+
+        // Create a set of flags we already have from RPC
+        const catalogFlagSet = new Set(roles.map(r => r.flag_key));
+
+        // Add missing roles (those not in catalog)
+        const missingRoles: RpcSelectedRole[] = trueFlags
+          .filter(flag => !catalogFlagSet.has(flag))
+          .map(flag => ({
+            flag_key: flag,
+            role_code: null,
+            role_name: flag.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+          }));
+
+        const allRoles = [...roles, ...missingRoles];
+        console.log('🔍 Total roles (catalog + missing):', allRoles.length, 'Catalog:', roles.length, 'Missing:', missingRoles.length);
+
         // Override route control values with data from security_role_selections
         const enhancedControls = controls.map(rc => {
           // Try multiple possible column names for voucher approver route controls
@@ -178,7 +199,7 @@ export default function MNITDetailsPage() {
           };
         });
 
-        setSelectedRoles(roles);
+        setSelectedRoles(allRoles);
         setRouteControls(enhancedControls);
 
         // Store selection row for business units and agency codes display
@@ -607,7 +628,7 @@ export default function MNITDetailsPage() {
                         <CodePill code={r.role_code} />
                       ) : (
                         <span className="ml-1 text-[10px] rounded bg-yellow-50 text-yellow-800 px-1.5 py-0.5">
-                          No code (catalog?)
+                          No code found
                         </span>
                       )}
                     </a>
@@ -629,7 +650,7 @@ export default function MNITDetailsPage() {
                             {r.role_code ? (
                               <CodePill code={r.role_code} />
                             ) : (
-                              <span className="text-[10px] rounded bg-gray-100 text-gray-500 px-1.5 py-0.5">No code</span>
+                              <span className="text-[10px] rounded bg-gray-100 text-gray-500 px-1.5 py-0.5">No code found</span>
                             )}
                           </div>
                         </div>
