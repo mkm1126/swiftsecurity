@@ -7,6 +7,8 @@ import { supabase } from './lib/supabase';
 import { toast } from 'sonner';
 import Header from './components/Header';
 import UserSelect from './components/UserSelect';
+import MultiSelect from './components/MultiSelect';
+import { agencies, healthLicensingBoards, smartAgencies } from './lib/agencyData';
 
 interface User {
   employee_name: string;
@@ -24,7 +26,7 @@ type Form = {
   dataExtracts?: boolean; // Data Extract (M_EPM_DATA_EXTRACTS)
 
   // Table 2 - General Warehouse Roles
-  gwAgencyCode?: string; // 3-character code used for agency-specific roles
+  gwAgencyCode?: string[]; // Array of 3-character codes for agency-specific roles
   gwBasicReportDev?: boolean;        // Agency Specific Basic Report Developer
   gwAdvancedReportDev?: boolean;     // Agency Specific Advanced Report Developer
   gwDashboardDeveloper?: boolean;    // Agency Specific Dashboard Developer
@@ -93,7 +95,7 @@ export default function EpmDwhRoleSelectionPage() {
       gwAdvancedReportDev: false,
       gwDashboardDeveloper: false,
       gwAgencyAdministrator: false,
-      gwAgencyCode: '',
+      gwAgencyCode: [],
 
       fmsLookup: false,
       yearEndFinancialReporting: false,
@@ -220,7 +222,20 @@ export default function EpmDwhRoleSelectionPage() {
 
       Object.entries(mappings).forEach(([dbField, formField]) => {
         if (roleSelections[dbField] !== undefined) {
-          setValue(formField, roleSelections[dbField], { shouldDirty: true });
+          // Handle gw_agency_code specially - convert to array if needed
+          if (dbField === 'gw_agency_code') {
+            const value = roleSelections[dbField];
+            if (Array.isArray(value)) {
+              setValue(formField, value, { shouldDirty: true });
+            } else if (typeof value === 'string' && value.trim()) {
+              // Legacy single value - convert to array
+              setValue(formField, [value], { shouldDirty: true });
+            } else {
+              setValue(formField, [], { shouldDirty: true });
+            }
+          } else {
+            setValue(formField, roleSelections[dbField], { shouldDirty: true });
+          }
         }
       });
 
@@ -338,7 +353,7 @@ export default function EpmDwhRoleSelectionPage() {
 
       if (data?.agency_code) {
         setValue('homeBusinessUnit', data.agency_code);
-        setValue('gwAgencyCode', data.agency_code);
+        setValue('gwAgencyCode', [data.agency_code]);
       }
     } catch (err) {
       console.error('Error fetching request details:', err);
@@ -389,7 +404,20 @@ export default function EpmDwhRoleSelectionPage() {
 
       Object.entries(mappings).forEach(([dbField, formField]) => {
         if (data[dbField] !== undefined) {
-          setValue(formField, data[dbField], { shouldDirty: false });
+          // Handle gw_agency_code specially - convert to array if needed
+          if (dbField === 'gw_agency_code') {
+            const value = data[dbField];
+            if (Array.isArray(value)) {
+              setValue(formField, value, { shouldDirty: false });
+            } else if (typeof value === 'string' && value.trim()) {
+              // Legacy single value - convert to array
+              setValue(formField, [value], { shouldDirty: false });
+            } else {
+              setValue(formField, [], { shouldDirty: false });
+            }
+          } else {
+            setValue(formField, data[dbField], { shouldDirty: false });
+          }
         }
       });
     } catch (e) {
@@ -432,8 +460,8 @@ export default function EpmDwhRoleSelectionPage() {
     }
     });
 
-    if (form.gwAgencyCode && form.gwAgencyCode.trim()) {
-      flags['gw_agency_code'] = form.gwAgencyCode.trim().toUpperCase().slice(0, 3);
+    if (form.gwAgencyCode && form.gwAgencyCode.length > 0) {
+      flags['gw_agency_code'] = form.gwAgencyCode.map(code => code.trim().toUpperCase().slice(0, 3));
     }
 
     if (form.roleJustification && form.roleJustification.trim()) {
@@ -636,24 +664,23 @@ export default function EpmDwhRoleSelectionPage() {
 
                     <tr>
                       <td className="px-6 py-4">
-                        <label className="block text-sm font-medium text-gray-700">
-                          Agency Code (from main form)
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Agency Codes
                         </label>
-                        <div className="mt-1 flex items-center">
-                          <input
-                            type="text"
-                            {...register('gwAgencyCode')}
-                            value={gwAgencyCode ?? ''}
-                            readOnly
-                            disabled
-                            className="w-24 text-center tracking-widest uppercase rounded-md border-gray-300 bg-gray-50 text-gray-600 shadow-sm cursor-not-allowed"
-                          />
-                          <span className="ml-3 text-sm text-gray-500">
-                            {requestDetails?.agency_name || 'Loading...'}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500">
-                          This agency code is automatically set from the User Details section of the main form and will be used for agency-specific EPM role codes (e.g., M_EPM_{gwAgencyCode ?? 'XXX'}_BASIC_RPT_DEVELOPER).
+                        <MultiSelect
+                          options={[
+                            ...agencies
+                              .filter(a => a.code !== 'HLB' && a.code !== 'SMT')
+                              .map(a => ({ value: a.code, label: `${a.name} (${a.code})` })),
+                            ...healthLicensingBoards.map(b => ({ value: b.code, label: `${b.name} (${b.code})` })),
+                            ...smartAgencies.map(s => ({ value: s.code, label: `${s.name} (${s.code})` }))
+                          ]}
+                          value={gwAgencyCode || []}
+                          onChange={(selectedCodes) => setValue('gwAgencyCode', selectedCodes, { shouldDirty: true })}
+                          placeholder="Select one or more agencies..."
+                        />
+                        <p className="mt-2 text-xs text-gray-500">
+                          Select one or more agency codes for agency-specific EPM roles (e.g., M_EPM_DOT_BASIC_RPT_DEVELOPER, M_EPM_MDH_BASIC_RPT_DEVELOPER). Each selected agency will generate a separate role code.
                         </p>
                       </td>
                     </tr>
