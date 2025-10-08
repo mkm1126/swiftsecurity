@@ -193,10 +193,10 @@ export default function EpmDwhRoleSelectionPage() {
       // Map database fields to form fields for EPM DWH roles
       const mappings: Record<string, keyof Form> = {
         data_extracts: 'dataExtracts',
-        gw_basic_report_dev: 'gwBasicReportDev',
-        gw_advanced_report_dev: 'gwAdvancedReportDev',
-        gw_dashboard_developer: 'gwDashboardDeveloper',
-        gw_agency_administrator: 'gwAgencyAdministrator',
+        basic_report_dev: 'gwBasicReportDev',  // Fixed: removed gw_ prefix
+        advanced_report_dev: 'gwAdvancedReportDev',  // Fixed: removed gw_ prefix
+        dashboard_developer: 'gwDashboardDeveloper',  // Fixed: removed gw_ prefix
+        agency_administrator: 'gwAgencyAdministrator',  // Fixed: removed gw_ prefix
         gw_agency_code: 'gwAgencyCode',
         fms_lookup: 'fmsLookup',
         year_end_financial_reporting: 'yearEndFinancialReporting',
@@ -362,10 +362,10 @@ export default function EpmDwhRoleSelectionPage() {
       // Map database fields to form fields
       const mappings: Record<string, keyof Form> = {
         data_extracts: 'dataExtracts',
-        gw_basic_report_dev: 'gwBasicReportDev',
-        gw_advanced_report_dev: 'gwAdvancedReportDev',
-        gw_dashboard_developer: 'gwDashboardDeveloper',
-        gw_agency_administrator: 'gwAgencyAdministrator',
+        basic_report_dev: 'gwBasicReportDev',  // Fixed: removed gw_ prefix
+        advanced_report_dev: 'gwAdvancedReportDev',  // Fixed: removed gw_ prefix
+        dashboard_developer: 'gwDashboardDeveloper',  // Fixed: removed gw_ prefix
+        agency_administrator: 'gwAgencyAdministrator',  // Fixed: removed gw_ prefix
         gw_agency_code: 'gwAgencyCode',
         fms_lookup: 'fmsLookup',
         year_end_financial_reporting: 'yearEndFinancialReporting',
