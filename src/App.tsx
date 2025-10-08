@@ -766,6 +766,9 @@ function App() {
                     placeholder="Please provide justification for this access request..."
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                   />
+                  <p className="mt-1 text-sm text-gray-500">
+                    Please enter additional specifications or comments on why the person needs access or why a change is needed.
+                  </p>
                 </div>
               </div>
 
