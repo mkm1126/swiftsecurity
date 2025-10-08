@@ -69,6 +69,7 @@ export default function MNITDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [securityAreas, setSecurityAreas] = useState<Array<{ area_type: string }>>([]);
 
   // Core data from RPC
   const [selectedRoles, setSelectedRoles] = useState<RpcSelectedRole[]>([]);
@@ -114,6 +115,13 @@ export default function MNITDetailsPage() {
         .eq('id', requestId)
         .single();
       if (whoQ.data) setWho({ employee: whoQ.data.employee_name, agency: whoQ.data.agency_name });
+
+      // Fetch security areas for conditional display
+      const { data: areasData } = await supabase
+        .from('security_areas')
+        .select('area_type')
+        .eq('request_id', requestId);
+      if (areasData) setSecurityAreas(areasData);
 
       // Load existing route control values from security_role_selections
       const { data: selectionData, error: selectionError } = await supabase
@@ -447,8 +455,8 @@ export default function MNITDetailsPage() {
             {requestId && <CopyIdPill idText={requestId} />}
           </div>
 
-          {/* Home Business Units */}
-          {selectionRow?.home_business_unit && (() => {
+          {/* Home Business Units - Only show for Accounting/Procurement (SWIFT) security area */}
+          {securityAreas.some(area => area.area_type === 'accounting_procurement') && selectionRow?.home_business_unit && (() => {
             const hbu = selectionRow.home_business_unit;
             let businessUnitCodes: string[] = [];
 
@@ -487,6 +495,47 @@ export default function MNITDetailsPage() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Agency Codes for EPM Data Warehouse - Only show for EPM DWH security area */}
+          {securityAreas.some(area => area.area_type === 'epm_data_warehouse') && selectionRow?.gw_agency_code && (() => {
+            const gwCodes = selectionRow.gw_agency_code;
+            let agencyCodes: string[] = [];
+
+            // Parse gw_agency_code based on format
+            if (Array.isArray(gwCodes)) {
+              agencyCodes = gwCodes;
+            } else if (typeof gwCodes === 'string' && gwCodes) {
+              const trimmed = gwCodes.trim();
+              // Skip empty array representations
+              if (trimmed !== '[]' && trimmed !== '{}' && trimmed !== '') {
+                agencyCodes = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+              }
+            }
+
+            if (agencyCodes.length === 0) return null;
+
+            return (
+              <div className="bg-white shadow rounded-lg mb-6">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-medium text-gray-900">Agency Codes for Agency-specific Roles</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    These agency codes are used for EPM Data Warehouse roles that require agency-specific permissions
+                  </p>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="space-y-2">
+                    {agencyCodes.map((code, index) => (
+                      <div key={index} className="flex items-start">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-green-100 text-green-800">
+                          {code}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
