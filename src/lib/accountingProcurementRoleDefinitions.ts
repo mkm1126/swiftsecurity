@@ -77,23 +77,23 @@ export const accountingProcurementRoles: AccountingProcurementRole[] = [
   {
     id: 'ap_voucher_approver_1',
     formDescription: 'AP Voucher Approver 1',
-    roleName: 'M_AP_VOUCHER_APPR_01_NEW',
+    roleName: 'M_FS_WF_AP_APPR_01',
     category: 'Accounts Payable',
-    description: 'New first level AP voucher approver.'
+    description: 'First level AP voucher approver with workflow routing.'
   },
   {
     id: 'ap_voucher_approver_2',
     formDescription: 'AP Voucher Approver 2',
-    roleName: 'M_AP_VOUCHER_APPR_02_NEW',
+    roleName: 'M_FS_WF_AP_APPR_02',
     category: 'Accounts Payable',
-    description: 'New second level AP voucher approver.'
+    description: 'Second level AP voucher approver with workflow routing.'
   },
   {
     id: 'ap_voucher_approver_3',
     formDescription: 'AP Voucher Approver 3',
-    roleName: 'M_AP_VOUCHER_APPR_03_NEW',
+    roleName: 'M_FS_WF_AP_APPR_03',
     category: 'Accounts Payable',
-    description: 'New third level AP voucher approver.'
+    description: 'Third level AP voucher approver with workflow routing.'
   },
   {
     id: 'ap_voucher_approver_1_route_controls',
