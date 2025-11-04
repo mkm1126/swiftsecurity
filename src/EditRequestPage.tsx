@@ -993,7 +993,7 @@ function EditRequestPage() {
                     <span className="ml-2 text-sm text-gray-700">ELM</span>
                   </label>
                   <p className="ml-6 mt-1 text-sm text-gray-500">
-                    DON'T SELECT ELM unless you are seeking access privileges for administrative functions. All staff automatically have access to ELM courses.
+                    DON'T SELECT ELM unless you are seeking access privileges for administrative functions. All active employees have access to ELM as a learner.
                   </p>
 
                   {selectedSecurityArea === 'elm' && (
