@@ -345,19 +345,27 @@ export default function EpmDwhRoleSelectionPage() {
         .from('security_role_requests')
         .select('employee_name, agency_name, agency_code')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      console.log('📋 Request details fetched:', data);
-      setRequestDetails(data || null);
 
-      if (data?.agency_code) {
+      if (!data) {
+        toast.error('Request not found. Please start from the main form.');
+        navigate('/');
+        return;
+      }
+
+      console.log('📋 Request details fetched:', data);
+      setRequestDetails(data);
+
+      if (data.agency_code) {
         setValue('homeBusinessUnit', data.agency_code);
         setValue('gwAgencyCode', [data.agency_code]);
       }
     } catch (err) {
       console.error('Error fetching request details:', err);
-      toast.error('Failed to load request details');
+      toast.error('Failed to load request details. Redirecting to main form.');
+      navigate('/');
     }
   }
 

@@ -272,12 +272,21 @@ function ElmRoleSelectionPage() {
         .from('security_role_requests')
         .select('employee_name, agency_name, agency_code')
         .eq('id', id)
-        .single();
+        .maybeSingle();
+
       if (error) throw error;
-      setRequestDetails(data || null);
+
+      if (!data) {
+        toast.error('Request not found. Please start from the main form.');
+        navigate('/');
+        return;
+      }
+
+      setRequestDetails(data);
     } catch (error) {
       console.error('Error fetching request details:', error);
-      toast.error('Failed to load request details');
+      toast.error('Failed to load request details. Redirecting to main form.');
+      navigate('/');
     }
   }
 

@@ -545,18 +545,26 @@ function HrPayrollRoleSelectionPage() {
         .from('security_role_requests')
         .select('employee_name, agency_name, agency_code')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      setRequestDetails(data || null);
+
+      if (!data) {
+        toast.error('Request not found. Please start from the main form.');
+        navigate('/');
+        return;
+      }
+
+      setRequestDetails(data);
 
       // if you keep a hidden Home BU field, reflect the agency code there for default padding, but do not touch the MultiSelect
-      if (data?.agency_code) {
+      if (data.agency_code) {
         setValue('homeBusinessUnit', data.agency_code);
       }
     } catch (err) {
       console.error('Error fetching request details:', err);
-      toast.error('Failed to load request details');
+      toast.error('Failed to load request details. Redirecting to main form.');
+      navigate('/');
     }
   };
 

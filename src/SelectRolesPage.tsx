@@ -472,17 +472,26 @@ function SelectRolesPage() {
       const { data, error } = await supabase
         .from('security_role_requests')
         .select('employee_name, agency_name, agency_code')
-        .eq('id', id);
+        .eq('id', id)
+        .maybeSingle();
+
       if (error) throw error;
-      const first = Array.isArray(data) ? data[0] : data;
-      setRequestDetails(first || null);
-      if (first?.agency_code) {
-        await fetchBusinessUnitsForAgency(first.agency_code);
+
+      if (!data) {
+        toast.error('Request not found. Please start from the main form.');
+        navigate('/');
+        return null;
       }
-      return first || null;
+
+      setRequestDetails(data);
+      if (data.agency_code) {
+        await fetchBusinessUnitsForAgency(data.agency_code);
+      }
+      return data;
     } catch (e) {
       console.error('Error fetching request details:', e);
-      toast.error('Failed to load request details');
+      toast.error('Failed to load request details. Redirecting to main form.');
+      navigate('/');
       return null;
     }
   };
