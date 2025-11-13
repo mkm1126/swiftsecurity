@@ -369,14 +369,16 @@ function ElmRoleSelectionPage() {
     // attempt 1
     let { error } = await supabase
       .from('security_role_selections')
-      .insert(initialPayload);
+      .upsert(initialPayload, { onConflict: 'request_id' });
     if (!error) return;
 
     // retry if array-format error
     if (isArrayFormatError(error)) {
-      console.warn('Array format error; retrying with array-coerced fields (insert)...', error);
+      console.warn('Array format error; retrying with array-coerced fields (upsert)...', error);
       const retryPayload = coerceArraysIfNeeded(initialPayload);
-      const retry = await supabase.from('security_role_selections').insert(retryPayload);
+      const retry = await supabase
+        .from('security_role_selections')
+        .upsert(retryPayload, { onConflict: 'request_id' });
       if (!retry.error) return;
       throw retry.error;
     }

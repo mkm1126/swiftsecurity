@@ -819,7 +819,7 @@ function SelectRolesPage() {
 
         const { error: selectionsError } = await supabase
           .from('security_role_selections')
-          .insert(normalized);
+          .upsert(normalized, { onConflict: 'request_id' });
 
         if (selectionsError) throw selectionsError;
 
