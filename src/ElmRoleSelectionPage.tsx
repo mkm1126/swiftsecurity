@@ -105,6 +105,7 @@ function buildSelections(
   const homeBU = (homeAgencyCode?.padEnd(5, '0') || '00000').substring(0, 5);
 
   // Full map of DB boolean columns for ELM
+  // NOTE: system_backup_access temporarily removed due to PostgREST cache issue
   const bools: Record<string, boolean> = {
     learning_administrator: !!form.learningAdministrator,
     learning_catalog_administrator: !!form.learningCatalogAdministrator,
@@ -114,7 +115,7 @@ function buildSelections(
     profile_administrator: !!form.profileAdministrator,
     m_hr_external_learner_security: !!form.externalLearnerSecurityAdministrator,
     m_lmlelm_external_learning_adm: !!form.externalLearnerSecurityAdministrator,
-    system_backup_access: !!form.sandboxAccess,
+    // system_backup_access: !!form.sandboxAccess, // TEMP DISABLED - PostgREST cache issue
   };
 
   return {
