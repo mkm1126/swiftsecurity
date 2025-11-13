@@ -128,13 +128,17 @@ function Header({ title, subtitle, onUserChange }: HeaderProps) {
   
   return (
     <>
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-4">
-            <button onClick={handleNewRequest} className="flex items-center hover:opacity-80 transition-opacity">
-              <img 
-                src="/mmb-homepage-logo3-01_tcm1059-264925_tcm1059-264925.png" 
-                alt="Minnesota Management & Budget"
+            <button
+              onClick={handleNewRequest}
+              className="flex items-center hover:opacity-80 transition-opacity focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
+              aria-label="Return to home page and start new request"
+            >
+              <img
+                src="/mmb-homepage-logo3-01_tcm1059-264925_tcm1059-264925.png"
+                alt="Minnesota Management & Budget Logo"
                 className="h-12 w-auto"
               />
             </button>
@@ -144,16 +148,16 @@ function Header({ title, subtitle, onUserChange }: HeaderProps) {
             )}
           </div>
         </div>
-      </div>
+      </header>
       
       {/* Centered Title Section */}
       {title && (
         <div className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="text-center">
-              <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{title}</h1>
               {subtitle && (
-                <p className="mt-2 text-lg text-gray-600">{subtitle}</p>
+                <p className="mt-2 text-base sm:text-lg text-gray-600">{subtitle}</p>
               )}
             </div>
           </div>
@@ -162,35 +166,38 @@ function Header({ title, subtitle, onUserChange }: HeaderProps) {
       
       {/* Action Buttons Section - Only show on main page */}
       {isMainPage && (
-        <div className="bg-gray-50 border-b border-gray-200">
+        <nav className="bg-gray-50 border-b border-gray-200" aria-label="Primary navigation">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-center space-x-4">
+            <div className="flex items-center justify-center gap-4 flex-wrap">
               <button
                 onClick={toggleTestMode}
-                className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-md ${
+                className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-md min-h-[44px] ${
                   isTestMode
-                    ? 'border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100'
+                    ? 'border-orange-400 text-orange-800 bg-orange-50 hover:bg-orange-100'
                     : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
                 } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                aria-pressed={isTestMode}
+                aria-label={isTestMode ? 'Disable test mode' : 'Enable test mode'}
               >
-                <Shield className="h-4 w-4 mr-2" />
+                <Shield className="h-4 w-4 mr-2" aria-hidden="true" />
                 {isTestMode ? 'Disable Test Mode' : 'Enable Test Mode'}
               </button>
               <Link
                 to="/requests"
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]"
+                aria-label="View all requests"
               >
-                <List className="h-4 w-4 mr-2" />
+                <List className="h-4 w-4 mr-2" aria-hidden="true" />
                 View Requests
               </Link>
             </div>
           </div>
-        </div>
+        </nav>
       )}
       
       {/* Non-main page action buttons */}
       {!isMainPage && !isRequestsPage && (
-        <div className="bg-gray-50 border-b border-gray-200">
+        <nav className="bg-gray-50 border-b border-gray-200" aria-label="Secondary navigation">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex flex-col items-center">
               {onUserChange && (
@@ -198,31 +205,34 @@ function Header({ title, subtitle, onUserChange }: HeaderProps) {
                   <UserSession onUserChange={onUserChange} />
                 </div>
               )}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
                 {!isMainPage && (
                   <button
                     onClick={toggleTestMode}
-                    className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md ${
+                    className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md min-h-[44px] ${
                       isTestMode
-                        ? 'border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100'
+                        ? 'border-orange-400 text-orange-800 bg-orange-50 hover:bg-orange-100'
                         : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
                     } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                    aria-pressed={isTestMode}
+                    aria-label={isTestMode ? 'Disable test mode' : 'Enable test mode'}
                   >
-                    <Shield className="h-4 w-4 mr-2" />
+                    <Shield className="h-4 w-4 mr-2" aria-hidden="true" />
                     {isTestMode ? 'Disable Test Mode' : 'Enable Test Mode'}
                   </button>
                 )}
                 <Link
                   to="/requests"
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]"
+                  aria-label="View all requests"
                 >
-                  <List className="h-4 w-4 mr-2" />
+                  <List className="h-4 w-4 mr-2" aria-hidden="true" />
                   View Requests
                 </Link>
               </div>
             </div>
           </div>
-        </div>
+        </nav>
 
       )} 
       

@@ -222,20 +222,21 @@ function SignaturePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header 
+      <Header
         title="Digital Signature"
         subtitle={`Approval of security request for ${request.employee_name}`}
       />
-      
-      <div className="py-8 px-4 sm:px-6 lg:px-8">
+
+      <main id="main-content" className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto">
           {!isReviewMode && (
             <div className="mb-8">
               <Link
                 to={`/requests/${requestId}`}
-                className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-500"
+                className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded min-h-[44px]"
+                aria-label="Return to request details"
               >
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
                 Back to Request Details
               </Link>
             </div>
@@ -243,18 +244,18 @@ function SignaturePage() {
 
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
-              <h2 className="text-lg font-medium text-gray-900">
+              <h1 className="text-xl font-medium text-gray-900">
                 Approval of security request for {request.employee_name}
-              </h2>
+              </h1>
             </div>
 
             <div className="px-4 py-5 sm:p-6">
               {/* Statement Text */}
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-900 mb-2">
+                <h2 className="text-base font-medium text-gray-900 mb-2">
                   {stepLabels[approval.step]}
-                </h3>
-                <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">
+                </h2>
+                <div className="bg-gray-50 rounded-lg p-4 text-base text-gray-900 whitespace-pre-wrap leading-relaxed" role="article" aria-label="Agreement terms">
                   {approvalText[approval.step]}
                 </div>
               </div>
@@ -263,46 +264,51 @@ function SignaturePage() {
               <div className="mb-6">
                 <label className="inline-flex items-start">
                   <input
+                    id="agreement-checkbox"
                     type="checkbox"
                     checked={hasAgreed}
                     onChange={(e) => setHasAgreed(e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4 mt-1"
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-5 w-5 mt-1"
+                    aria-required="true"
+                    aria-describedby={!hasAgreed && error ? 'agreement-error' : undefined}
                   />
-                  <span className="ml-2 text-sm text-gray-700">
+                  <span className="ml-3 text-base text-gray-900">
                     I have read and agree to the above statement
                   </span>
                 </label>
                 {!hasAgreed && error && (
-                  <p className="mt-1 text-sm text-red-600">
+                  <p id="agreement-error" className="mt-1 text-sm text-red-600" role="alert">
                     You must agree to the terms before signing
                   </p>
                 )}
                 
                 {/* Comments Box */}
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="approval-comments" className="block text-sm font-medium text-gray-700 mb-2">
                     Additional Comments (Optional)
                   </label>
                   <textarea
+                    id="approval-comments"
                     value={comments}
                     onChange={(e) => setComments(e.target.value)}
                     rows={3}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base"
                     placeholder="Add any additional comments or notes regarding this approval..."
+                    aria-describedby="comments-help"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p id="comments-help" className="mt-1 text-sm text-gray-600">
                     These comments will be saved with your signature for reference.
                   </p>
                 </div>
               </div>
 
               {/* Signature Canvas */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Digital Signature <span className="text-red-500">*</span>
-                </label>
-                <div className="border-2 border-gray-300 rounded-lg bg-white relative">
-                  <div className="absolute top-2 left-2 text-xs text-gray-400 pointer-events-none">
+              <fieldset className="mb-4">
+                <legend className="block text-sm font-medium text-gray-700 mb-2">
+                  Digital Signature <span className="text-red-600" aria-label="required">*</span>
+                </legend>
+                <div className="border-2 border-gray-400 rounded-lg bg-white relative" role="img" aria-label="Signature drawing area">
+                  <div className="absolute top-2 left-2 text-sm text-gray-500 pointer-events-none" aria-hidden="true">
                     Sign here
                   </div>
                 <canvas
@@ -317,20 +323,22 @@ function SignaturePage() {
                   onTouchStart={startDrawing}
                   onTouchMove={draw}
                   onTouchEnd={stopDrawing}
+                  aria-label="Draw your signature using mouse or touch"
+                  tabIndex={0}
                 />
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Use your mouse or touch to sign above
+                <p className="mt-2 text-sm text-gray-700" id="signature-instructions">
+                  Use your mouse or touch to sign above. Keyboard users: Please contact support for alternative signing methods.
                 </p>
-              </div>
+              </fieldset>
 
               {error && (
-                <div className="mt-4 bg-red-50 border border-red-200 rounded-md p-4">
+                <div className="mt-4 bg-red-50 border-2 border-red-400 rounded-md p-4" role="alert" aria-live="assertive">
                   <div className="flex">
-                    <X className="h-5 w-5 text-red-400" />
+                    <X className="h-5 w-5 text-red-600" aria-hidden="true" />
                     <div className="ml-3">
-                      <h3 className="text-sm font-medium text-red-800">Error</h3>
-                      <div className="mt-2 text-sm text-red-700">
+                      <h3 className="text-base font-medium text-red-900">Error</h3>
+                      <div className="mt-2 text-base text-red-800">
                         <p>{error}</p>
                       </div>
                     </div>
@@ -338,11 +346,12 @@ function SignaturePage() {
                 </div>
               )}
 
-              <div className="mt-4 flex justify-end space-x-4">
+              <div className="mt-6 flex justify-end gap-4 flex-wrap">
                 <button
                   type="button"
                   onClick={clearSignature}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]"
+                  aria-label="Clear signature"
                 >
                   Clear
                 </button>
@@ -350,20 +359,22 @@ function SignaturePage() {
                   type="button"
                   onClick={saveSignature}
                   disabled={!hasAgreed}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                  className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white min-h-[44px] ${
                     hasAgreed
                       ? 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
                       : 'bg-gray-400 cursor-not-allowed'
                   }`}
+                  aria-label={hasAgreed ? 'Save and submit signature' : 'Please agree to terms before signing'}
+                  aria-disabled={!hasAgreed}
                 >
-                  <Check className="h-4 w-4 mr-2" />
+                  <Check className="h-5 w-5 mr-2" aria-hidden="true" />
                   {hasAgreed ? 'Save Signature' : 'Please agree to terms first'}
                 </button>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

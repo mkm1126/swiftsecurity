@@ -3,6 +3,16 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-size: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
   input[type="date"],
   input[type="email"],
   input[type="number"],
@@ -14,5 +24,77 @@
   select,
   textarea {
     @apply rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500;
+    font-size: 1rem;
+    min-height: 2.75rem;
+  }
+
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  *:focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 640px) {
+    html {
+      font-size: 100%;
+    }
+  }
+}
+
+@layer components {
+  .skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: #2563eb;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    text-decoration: none;
+    font-weight: 600;
+    z-index: 100;
+    border-radius: 0 0 0.375rem 0;
+  }
+
+  .skip-link:focus {
+    top: 0;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .focus-visible-ring {
+    @apply focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2;
+  }
+}
+
+@layer utilities {
+  .text-base-accessible {
+    font-size: clamp(1rem, 1rem + 0.1vw, 1.125rem);
+  }
+
+  .text-sm-accessible {
+    font-size: clamp(0.875rem, 0.875rem + 0.1vw, 1rem);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

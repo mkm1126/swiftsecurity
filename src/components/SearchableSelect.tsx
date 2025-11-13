@@ -113,52 +113,59 @@ function SearchableSelect({
     setSearchTerm('');
   };
 
+  const selectId = `searchable-select-${label?.replace(/\s+/g, '-').toLowerCase() || Math.random()}`;
+
   return (
     <div className="relative" ref={dropdownRef}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {label}{required && <span className="text-red-500 ml-1">*</span>}
+        <label htmlFor={selectId} className="block text-sm font-medium text-gray-700 mb-1">
+          {label}{required && <span className="text-red-600 ml-1" aria-label="required">*</span>}
         </label>
       )}
       
       {/* Main select button */}
-      <div
+      <button
+        id={selectId}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         onKeyDown={handleKeyDown}
-        tabIndex={0}
-        role="button"
-        className={`relative w-full bg-white border rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
+        className={`relative w-full bg-white border rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:border-blue-500 min-h-[44px] ${
           error ? 'border-red-300' : 'border-gray-300'
         }`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        aria-labelledby={label ? undefined : selectId}
+        aria-label={!label ? (displayValue || placeholder) : undefined}
       >
-        <span className={`block truncate ${!displayValue ? 'text-gray-500' : 'text-gray-900'}`}>
+        <span className={`block truncate text-base ${!displayValue ? 'text-gray-500' : 'text-gray-900'}`}>
           {displayValue || placeholder}
         </span>
-        <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+        <span className="absolute inset-y-0 right-0 flex items-center pr-2">
           {value && (
-            <div
+            <button
+              type="button"
               onClick={handleClear}
-              className="mr-2 p-1 hover:bg-gray-100 rounded pointer-events-auto cursor-pointer"
+              className="mr-2 p-1 hover:bg-gray-100 rounded cursor-pointer min-w-[24px] min-h-[24px]"
               title="Clear selection"
+              aria-label="Clear selection"
             >
-              <X className="h-4 w-4 text-gray-400" />
-            </div>
+              <X className="h-4 w-4 text-gray-600" aria-hidden="true" />
+            </button>
           )}
-          <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
         </span>
-      </div>
+      </button>
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none">
+        <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none" role="listbox">
           {/* Search input */}
           <div className="sticky top-0 bg-white px-3 py-2 border-b border-gray-200">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <label htmlFor={`${selectId}-search`} className="sr-only">Search options</label>
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
               <input
+                id={`${selectId}-search`}
                 ref={searchInputRef}
                 type="text"
                 value={searchTerm}
@@ -167,8 +174,9 @@ function SearchableSelect({
                   setHighlightedIndex(-1);
                 }}
                 onKeyDown={handleKeyDown}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                 placeholder={searchPlaceholder}
+                aria-label="Search options"
               />
             </div>
           </div>
@@ -176,7 +184,7 @@ function SearchableSelect({
           {/* Options list */}
           <div className="max-h-48 overflow-y-auto overflow-x-hidden">
             {filteredOptions.length === 0 ? (
-              <div className="px-3 py-2 text-gray-500 text-sm">
+              <div className="px-3 py-2 text-gray-600 text-base" role="status">
                 No options found matching "{searchTerm}"
               </div>
             ) : (
@@ -184,7 +192,7 @@ function SearchableSelect({
                 <div
                   key={option.value}
                   onClick={() => handleOptionSelect(option.value)}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 focus:outline-none focus:bg-blue-50 ${
+                  className={`w-full text-left px-3 py-2 text-base hover:bg-blue-50 focus:outline-none focus:bg-blue-50 min-h-[44px] flex items-center ${
                     index === highlightedIndex ? 'bg-blue-50' : ''
                   } ${
                     option.value === value ? 'bg-blue-100 text-blue-900 font-medium' : 'text-gray-900'

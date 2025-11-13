@@ -565,49 +565,57 @@ function App() {
         onUserChange={handleUserChange}
       />
 
-      {!currentUser && !effectiveId ? (
-        <div className="py-8 px-4 sm:px-6 lg:px-8">
+      <main id="main-content" className="py-8 px-4 sm:px-6 lg:px-8">
+        {!currentUser && !effectiveId ? (
           <div className="max-w-4xl mx-auto text-center">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-              <h3 className="text-lg font-medium text-blue-900 mb-2">User Identification Required</h3>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6" role="alert" aria-live="polite">
+              <h2 className="text-lg font-medium text-blue-900 mb-2">User Identification Required</h2>
               <p className="text-blue-700">Please identify yourself to begin creating requests.</p>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="py-8 px-4 sm:px-6 lg:px-8">
+        ) : (
           <div className="max-w-4xl mx-auto">
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 bg-white p-8 rounded-lg shadow">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 bg-white p-4 sm:p-6 md:p-8 rounded-lg shadow" noValidate aria-label="Security role access request form">
               {/* Employee Details */}
-              <div className="space-y-6">
-                <div className="flex items-center">
-                  <ClipboardList className="h-6 w-6 text-blue-600 mr-2" />
-                  <h3 className="text-xl font-semibold text-gray-900">Employee Details</h3>
-                </div>
+              <fieldset className="space-y-6">
+                <legend className="flex items-center text-xl font-semibold text-gray-900">
+                  <ClipboardList className="h-6 w-6 text-blue-600 mr-2" aria-hidden="true" />
+                  <span>Employee Details</span>
+                </legend>
 
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Start Date of Access*</label>
+                    <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
+                      Start Date of Access<span className="text-red-600" aria-label="required">*</span>
+                    </label>
                     <input
+                      id="startDate"
                       type="date"
                       {...register('startDate', {
                         required: 'Start date is required',
                         validate: (value) => isAfter(new Date(value), startOfToday()) || 'Start date must be in the future',
                       })}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      aria-invalid={errors.startDate ? 'true' : 'false'}
+                      aria-describedby={errors.startDate ? 'startDate-error' : undefined}
                     />
-                    {errors.startDate && <p className="mt-1 text-sm text-red-600">{errors.startDate.message}</p>}
+                    {errors.startDate && <p id="startDate-error" className="mt-1 text-sm text-red-600" role="alert">{errors.startDate.message}</p>}
                   </div>
 
                   <div>
-                    <label className="block text sm font-medium text-gray-700">Employee Name*</label>
+                    <label htmlFor="employeeName" className="block text-sm font-medium text-gray-700">
+                      Employee Name<span className="text-red-600" aria-label="required">*</span>
+                    </label>
                     <input
+                      id="employeeName"
                       type="text"
                       {...register('employeeName', { required: 'Employee name is required' })}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      aria-invalid={errors.employeeName ? 'true' : 'false'}
+                      aria-describedby={errors.employeeName ? 'employeeName-error' : undefined}
                     />
                     {errors.employeeName && (
-                      <p className="mt-1 text-sm text-red-600">{errors.employeeName.message}</p>
+                      <p id="employeeName-error" className="mt-1 text-sm text-red-600" role="alert">{errors.employeeName.message}</p>
                     )}
                   </div>
 
@@ -753,7 +761,7 @@ function App() {
                 </div>
 
                 {errors.root && (
-                  <div className="rounded-md bg-red-50 p-4">
+                  <div className="rounded-md bg-red-50 p-4" role="alert" aria-live="assertive">
                     <div className="flex">
                       <div className="ml-3">
                         <h3 className="text-sm font-medium text-red-800">Form Error</h3>
@@ -777,11 +785,11 @@ function App() {
                     Please enter additional specifications or comments on why the person needs access or why a change is needed.
                   </p>
                 </div>
-              </div>
+              </fieldset>
 
               {/* Submitter Details */}
-              <div className="space-y-6">
-                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Submitter Details</h3>
+              <fieldset className="space-y-6">
+                <legend className="text-xl font-semibold text-gray-900 border-b pb-2 w-full">Submitter Details</legend>
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Submitter Name*</label>
@@ -809,11 +817,11 @@ function App() {
                     )}
                   </div>
                 </div>
-              </div>
+              </fieldset>
 
               {/* Approver Details */}
-              <div className="space-y-6">
-                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Approver Details</h3>
+              <fieldset className="space-y-6">
+                <legend className="text-xl font-semibold text-gray-900 border-b pb-2 w-full">Approver Details</legend>
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Employee's Supervisor*</label>
@@ -868,18 +876,18 @@ function App() {
                     )}
                   </div>
                 </div>
-              </div>
+              </fieldset>
 
               {/* Security Details + CTA */}
-              <div className="space-y-6">
-                <h3 className="text-xl font-semibold text-gray-900 border-b pb-2">Security Details</h3>
+              <fieldset className="space-y-6">
+                <legend className="text-xl font-semibold text-gray-900 border-b pb-2 w-full">Security Details</legend>
                 <p className="text-sm text-gray-700">Please select the security area you need access to</p>
 
                 {!hasSelectedSecurityArea && (
-                  <div className="rounded-md bg-yellow-50 p-4">
+                  <div className="rounded-md bg-yellow-50 p-4" role="alert" aria-live="polite">
                     <div className="flex">
                       <div className="ml-3">
-                        <h3 className="text-sm font-medium text-yellow-800">Required Selection</h3>
+                        <h4 className="text-sm font-medium text-yellow-800">Required Selection</h4>
                         <div className="mt-2 text-sm text-yellow-700">
                           <p>Please select a security area to proceed.</p>
                         </div>
@@ -1090,23 +1098,24 @@ function App() {
                   <button
                     type="submit"
                     disabled={submitting || !hasSelectedSecurityArea}
-                    className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                    className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white ${
                       !submitting && hasSelectedSecurityArea
                         ? 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
                         : 'bg-gray-400 cursor-not-allowed'
                     }`}
+                    aria-disabled={submitting || !hasSelectedSecurityArea}
                   >
                     {submitting ? 'Saving…' : ctaLabel}
                   </button>
-                  <p className="mt-2 text-center text-sm text-gray-500">
+                  <p className="mt-2 text-center text-sm text-gray-600">
                     You can select individual roles or copy from an existing user on the next page
                   </p>
                 </div>
-              </div>
+              </fieldset>
             </form>
           </div>
-        </div>
-      )}
+        )}
+      </main>
     </div>
   );
 }

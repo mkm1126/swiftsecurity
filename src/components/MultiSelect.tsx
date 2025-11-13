@@ -132,34 +132,43 @@ function MultiSelect({
       )}
       
       {/* Main select button */}
-      <div
+      <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`relative w-full bg-white border rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsOpen(!isOpen);
+          }
+        }}
+        className={`relative w-full bg-white border rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:border-blue-500 min-h-[44px] ${
           error ? 'border-red-300' : 'border-gray-300'
         }`}
-        role="button"
-        tabIndex={0}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel || (label ? `${label}, ${normalizedValue.length} selected` : `${normalizedValue.length} items selected`)}
       >
-        <span className={`block truncate ${normalizedValue.length === 0 ? 'text-gray-500' : 'text-gray-900'}`}>
+        <span className={`block truncate text-base ${normalizedValue.length === 0 ? 'text-gray-500' : 'text-gray-900'}`}>
           {getDisplayText()}
         </span>
         <span className="absolute inset-y-0 right-0 flex items-center pr-2">
           {normalizedValue.length > 0 && (
             <button
-              onClick={handleClear}
-              className="mr-2 p-1 hover:bg-gray-100 rounded"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClear(e);
+              }}
+              className="mr-2 p-1 hover:bg-gray-100 rounded min-w-[24px] min-h-[24px]"
               title="Clear all selections"
               type="button"
+              aria-label="Clear all selections"
             >
-              <X className="h-4 w-4 text-gray-400" />
+              <X className="h-4 w-4 text-gray-600" aria-hidden="true" />
             </button>
           )}
-          <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
         </span>
-      </div>
+      </button>
 
       {/* Selected items display */}
       {normalizedValue.length > 0 && (
@@ -187,18 +196,21 @@ function MultiSelect({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className={`absolute z-10 mt-1 w-full bg-white shadow-lg ${maxHeight} rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none`}>
+        <div className={`absolute z-10 mt-1 w-full bg-white shadow-lg ${maxHeight} rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 focus:outline-none`} role="listbox" aria-multiselectable="true">
           {/* Search input */}
           <div className="sticky top-0 bg-white px-3 py-2 border-b border-gray-200">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <label htmlFor={`multiselect-search-${label}`} className="sr-only">Search options</label>
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" aria-hidden="true" />
               <input
+                id={`multiselect-search-${label}`}
                 ref={searchInputRef}
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                 placeholder={searchPlaceholder}
+                aria-label="Search options"
               />
             </div>
           </div>
@@ -208,15 +220,16 @@ function MultiSelect({
             <div className="px-3 py-2 border-b border-gray-100">
               <button
                 onClick={handleSelectAll}
-                className="w-full text-left px-2 py-1 text-sm hover:bg-blue-50 rounded flex items-center"
+                className="w-full text-left px-2 py-1 text-sm hover:bg-blue-50 rounded flex items-center min-h-[44px]"
                 type="button"
+                aria-label={`${allFilteredSelected ? 'Deselect' : 'Select'} all ${filteredOptions.length} options`}
               >
-                <div className={`w-4 h-4 border rounded mr-3 flex items-center justify-center ${
-                  allFilteredSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+                <div className={`w-5 h-5 border-2 rounded mr-3 flex items-center justify-center flex-shrink-0 ${
+                  allFilteredSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-400'
                 }`}>
-                  {allFilteredSelected && <Check className="h-3 w-3 text-white" />}
+                  {allFilteredSelected && <Check className="h-4 w-4 text-white" aria-hidden="true" />}
                 </div>
-                <span className="font-medium text-blue-600">
+                <span className="font-medium text-blue-700 text-base">
                   {allFilteredSelected ? 'Deselect All' : 'Select All'} ({filteredOptions.length})
                 </span>
               </button>
@@ -236,14 +249,16 @@ function MultiSelect({
                   <div
                     key={option.value}
                     onClick={() => handleOptionToggle(option.value)}
-                    className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex items-center"
+                    className="px-3 py-2 hover:bg-blue-50 cursor-pointer flex items-center min-h-[44px]"
+                    role="option"
+                    aria-selected={normalizedValue.includes(option.value)}
                   >
-                    <div className={`w-4 h-4 border rounded mr-3 flex items-center justify-center ${
-                      normalizedValue.includes(option.value) ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
+                    <div className={`w-5 h-5 border-2 rounded mr-3 flex items-center justify-center flex-shrink-0 ${
+                      normalizedValue.includes(option.value) ? 'bg-blue-600 border-blue-600' : 'border-gray-400'
                     }`}>
-                      {normalizedValue.includes(option.value) && <Check className="h-3 w-3 text-white" />}
+                      {normalizedValue.includes(option.value) && <Check className="h-4 w-4 text-white" aria-hidden="true" />}
                     </div>
-                    <span className={`text-sm ${normalizedValue.includes(option.value) ? 'text-blue-900 font-medium' : 'text-gray-900'}`}>
+                    <span className={`text-base ${normalizedValue.includes(option.value) ? 'text-blue-900 font-medium' : 'text-gray-900'}`}>
                       {option.label}
                     </span>
                   </div>
